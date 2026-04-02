@@ -113,7 +113,7 @@ void MainWindow::setupUi()
     toolbar->setMovable(false);
     toolbar->setIconSize(QSize(16, 16));
 
-    auto *actConnect = toolbar->addAction("🔌 接続");
+    auto *actConnect = toolbar->addAction("接続");
     actConnect->setToolTip("UDP接続の再接続");
     connect(actConnect, &QAction::triggered, [this]() {
         m_udpLink->stop();
@@ -125,7 +125,7 @@ void MainWindow::setupUi()
 
     toolbar->addSeparator();
 
-    auto *actReset = toolbar->addAction("🔄 リセット");
+    auto *actReset = toolbar->addAction("リセット");
     connect(actReset, &QAction::triggered, [this]() {
         m_simulator->stop();
         m_simulator->state() = DroneState();
@@ -167,8 +167,8 @@ void MainWindow::setupUi()
 
     m_mapView3D = new MapView3D();
     m_mapView = new MapView();
-    mapTabs->addTab(m_mapView3D, "🎮 3D ビュー");
-    mapTabs->addTab(m_mapView, "🗺 2D マップ");
+    mapTabs->addTab(m_mapView3D, "3D ビュー");
+    mapTabs->addTab(m_mapView, "2D マップ");
 
     // 右パネル（操作）
     m_controlPanel = new ControlPanel();
