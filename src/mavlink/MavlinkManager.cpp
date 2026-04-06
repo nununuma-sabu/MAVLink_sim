@@ -206,3 +206,44 @@ void MavlinkManager::sendCommandAck(uint16_t command, uint8_t result,
     );
     m_link->sendMessage(msg);
 }
+
+void MavlinkManager::sendAutopilotVersion()
+{
+    mavlink_message_t msg;
+
+    uint64_t capabilities =
+        MAV_PROTOCOL_CAPABILITY_MISSION_FLOAT |
+        MAV_PROTOCOL_CAPABILITY_COMMAND_INT |
+        MAV_PROTOCOL_CAPABILITY_MAVLINK2 |
+        MAV_PROTOCOL_CAPABILITY_MISSION_INT;
+
+    uint8_t flight_sw_version[4] = {1, 0, 0, 0};
+    uint8_t middleware_sw_version[4] = {0};
+    uint8_t os_sw_version[4] = {0};
+    uint8_t uid[8] = {0};
+
+    uint32_t fw_ver = (flight_sw_version[3] << 24) |
+                      (flight_sw_version[2] << 16) |
+                      (flight_sw_version[1] << 8)  |
+                       flight_sw_version[0];
+
+    mavlink_msg_autopilot_version_pack(
+        m_sysId, m_compId, &msg,
+        capabilities,
+        fw_ver,       // flight_sw_version
+        0,            // middleware_sw_version
+        0,            // os_sw_version
+        0,            // board_version
+        nullptr, nullptr, nullptr,  // flight_custom_version x3
+        0,            // vendor_id
+        0,            // product_id
+        0,            // uid
+        uid           // uid2
+    );
+    m_link->sendMessage(msg);
+}
+
+void MavlinkManager::sendRawMessage(const mavlink_message_t &msg)
+{
+    m_link->sendMessage(msg);
+}

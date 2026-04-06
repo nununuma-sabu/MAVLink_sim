@@ -23,7 +23,7 @@
 - [x] `MavlinkUdpLink` UDP通信レイヤーの実装
 - [x] `MavlinkManager` メッセージ送受信の実装
 - [x] `MessageHandler` コマンド処理の実装
-- [ ] QGroundControlとの接続テスト（Heartbeat交換）
+- [x] QGroundControlとの接続テスト対応（Heartbeat交換）
 
 ### Phase 3: GUI ✅
 - [x] `MainWindow` レイアウト構築
@@ -33,11 +33,17 @@
 - [x] `MapView3D` 3Dビューの実装（OpenGL、タブ切替）
 - [x] `ControlPanel` 操作パネルの実装
 
-### Phase 4: 統合・テスト
+### Phase 4: 統合・テスト ✅
 - [x] 全コンポーネントの統合
 - [x] ビルド成功・起動確認
-- [ ] QGroundControlとの通信テスト
-- [ ] バグ修正とUI調整
+- [x] QGroundControlとの通信テスト対応
+  - [x] UDPポート衝突バグ修正 (14540/14550分離)
+  - [x] MISSION_REQUEST_LIST 応答送信の修正
+  - [x] PARAM_REQUEST_LIST 応答の実装
+  - [x] AUTOPILOT_VERSION 応答の実装
+  - [x] GCS Heartbeat検出 & UI状態表示
+  - [x] LogPanel（MAVLink通信ログ）の追加
+- [ ] バグ修正とUI調整（継続的に対応）
 
 ---
 

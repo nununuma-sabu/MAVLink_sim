@@ -3,6 +3,7 @@
 
 #include <QMainWindow>
 #include <QLabel>
+#include <QTimer>
 
 class DroneSimulator;
 class FlightController;
@@ -14,6 +15,7 @@ class TelemetryPanel;
 class MapView;
 class MapView3D;
 class ControlPanel;
+class LogPanel;
 
 struct DroneState;
 
@@ -63,6 +65,13 @@ private:
     // ステータスバー
     QLabel *m_lblStatus;
     QLabel *m_lblConnection;
+    QLabel *m_lblGcsStatus;
+
+    // GCS Heartbeat タイムアウト
+    QTimer m_gcsTimeoutTimer;
+
+    // ログパネル
+    LogPanel *m_logPanel;
 };
 
 #endif // MAINWINDOW_H

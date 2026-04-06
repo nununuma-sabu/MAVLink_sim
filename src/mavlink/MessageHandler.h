@@ -30,6 +30,12 @@ public slots:
     /// MAVLinkメッセージの処理
     void handleMessage(const mavlink_message_t &msg);
 
+signals:
+    /// GCSからHeartbeat受信
+    void gcsHeartbeatReceived();
+    /// ログメッセージ
+    void logMessage(const QString &msg);
+
 private:
     void handleCommandLong(const mavlink_message_t &msg);
     void handleCommandInt(const mavlink_message_t &msg);

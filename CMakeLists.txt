@@ -47,6 +47,8 @@ set(GUI_SOURCES
     src/gui/MapView3D.cpp
     src/gui/ControlPanel.h
     src/gui/ControlPanel.cpp
+    src/gui/LogPanel.h
+    src/gui/LogPanel.cpp
 )
 
 add_executable(${PROJECT_NAME}

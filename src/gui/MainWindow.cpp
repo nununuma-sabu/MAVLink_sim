@@ -4,6 +4,7 @@
 #include "MapView.h"
 #include "MapView3D.h"
 #include "ControlPanel.h"
+#include "LogPanel.h"
 #include "core/DroneSimulator.h"
 #include "core/FlightController.h"
 #include "mavlink/MavlinkUdpLink.h"
@@ -19,6 +20,7 @@
 #include <QMessageBox>
 #include <QComboBox>
 #include <QTabWidget>
+#include <QDockWidget>
 #include <QDebug>
 
 MainWindow::MainWindow(QWidget *parent)
@@ -35,14 +37,24 @@ MainWindow::MainWindow(QWidget *parent)
     setupUi();
     setupConnections();
 
-    // UDP通信開始
-    if (m_udpLink->start(14550, QHostAddress::LocalHost, 14550)) {
-        qDebug() << "[MainWindow] UDP通信開始 ポート: 14550";
+    // UDP通信開始 (ローカル: 14540, 送信先: 14550)
+    // QGCは14550でリッスンするので、シミュレータは14540でリッスン
+    if (m_udpLink->start(14540, QHostAddress::LocalHost, 14550)) {
+        qDebug() << "[MainWindow] UDP通信開始 ローカル:14540 → GCS:14550";
+        m_logPanel->appendLog("UDP通信開始 ローカル:14540 → GCS:14550");
     }
 
     // シミュレーション＆テレメトリ開始
     m_simulator->start();
     m_mavManager->startTelemetry();
+
+    // GCS Heartbeat タイムアウト設定 (5秒)
+    m_gcsTimeoutTimer.setSingleShot(true);
+    connect(&m_gcsTimeoutTimer, &QTimer::timeout, [this]() {
+        m_lblGcsStatus->setText("GCS: 未接続");
+        m_lblGcsStatus->setStyleSheet("color: #888; font-size: 11px;");
+        m_logPanel->appendLog("GCS Heartbeat タイムアウト — 未接続");
+    });
 
     setWindowTitle("MAVLink ドローンシミュレーター v1.0");
     resize(1200, 800);
@@ -103,6 +115,15 @@ void MainWindow::setupStyle()
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
             height: 0;
         }
+        QDockWidget {
+            color: #ccc;
+            titlebar-close-icon: none;
+        }
+        QDockWidget::title {
+            background: #252530;
+            padding: 4px;
+            border-bottom: 1px solid #3a3a42;
+        }
     )");
 }
 
@@ -117,9 +138,10 @@ void MainWindow::setupUi()
     actConnect->setToolTip("UDP接続の再接続");
     connect(actConnect, &QAction::triggered, [this]() {
         m_udpLink->stop();
-        if (m_udpLink->start(14550, QHostAddress::LocalHost, 14550)) {
+        if (m_udpLink->start(14540, QHostAddress::LocalHost, 14550)) {
             m_lblConnection->setText("● 接続中");
             m_lblConnection->setStyleSheet("color: #2ecc71;");
+            m_logPanel->appendLog("UDP再接続 ローカル:14540 → GCS:14550");
         }
     });
 
@@ -132,6 +154,7 @@ void MainWindow::setupUi()
         m_mapView->clearTrace();
         m_mapView3D->clearTrace();
         m_simulator->start();
+        m_logPanel->appendLog("シミュレーションリセット");
     });
 
     // メインレイアウト
@@ -191,9 +214,27 @@ void MainWindow::setupUi()
     m_lblStatus->setStyleSheet("color: #2ecc71; font-weight: bold;");
     statusBar()->addWidget(m_lblStatus, 1);
 
+    m_lblGcsStatus = new QLabel("GCS: 未接続");
+    m_lblGcsStatus->setStyleSheet("color: #888; font-size: 11px;");
+    statusBar()->addPermanentWidget(m_lblGcsStatus);
+
     m_lblConnection = new QLabel("● 待機中");
     m_lblConnection->setStyleSheet("color: #f39c12;");
     statusBar()->addPermanentWidget(m_lblConnection);
+
+    // ログパネル（ドッキングウィジェット）
+    m_logPanel = new LogPanel();
+    auto *dockLog = new QDockWidget("MAVLink ログ", this);
+    dockLog->setWidget(m_logPanel);
+    dockLog->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable);
+    dockLog->setMinimumHeight(120);
+    addDockWidget(Qt::BottomDockWidgetArea, dockLog);
+
+    // ツールバーにログ表示/非表示トグルを追加
+    auto *actLog = dockLog->toggleViewAction();
+    actLog->setText("ログ");
+    toolbar->addSeparator();
+    toolbar->addAction(actLog);
 }
 
 void MainWindow::setupConnections()
@@ -216,6 +257,18 @@ void MainWindow::setupConnections()
             m_lblConnection->setStyleSheet("color: #e74c3c;");
         }
     });
+
+    // GCS Heartbeat 受信 → ステータス更新
+    connect(m_msgHandler, &MessageHandler::gcsHeartbeatReceived, [this]() {
+        m_lblGcsStatus->setText("GCS: 接続済み ✓");
+        m_lblGcsStatus->setStyleSheet("color: #2ecc71; font-size: 11px; font-weight: bold;");
+        // タイムアウトタイマーをリスタート (5秒)
+        m_gcsTimeoutTimer.start(5000);
+    });
+
+    // ログ出力
+    connect(m_msgHandler, &MessageHandler::logMessage,
+            m_logPanel, &LogPanel::appendLog);
 
     // 操作パネル → シミュレーター
     connect(m_controlPanel, &ControlPanel::armRequested,
@@ -261,6 +314,8 @@ void MainWindow::onArmRequested()
 {
     if (!m_simulator->arm()) {
         statusBar()->showMessage("ARM失敗: 地上にいることを確認してください", 3000);
+    } else {
+        m_logPanel->appendLog("→ ARM 実行");
     }
 }
 
@@ -268,6 +323,8 @@ void MainWindow::onDisarmRequested()
 {
     if (!m_simulator->disarm()) {
         statusBar()->showMessage("DISARM失敗: 着陸してください", 3000);
+    } else {
+        m_logPanel->appendLog("→ DISARM 実行");
     }
 }
 
@@ -275,17 +332,21 @@ void MainWindow::onTakeoffRequested(double altitude)
 {
     if (!m_simulator->takeoff(altitude)) {
         statusBar()->showMessage("TAKEOFF失敗: ARMしてください", 3000);
+    } else {
+        m_logPanel->appendLog(QString("→ TAKEOFF 高度: %1m").arg(altitude));
     }
 }
 
 void MainWindow::onLandRequested()
 {
     m_simulator->land();
+    m_logPanel->appendLog("→ LAND 実行");
 }
 
 void MainWindow::onRtlRequested()
 {
     m_simulator->returnToLaunch();
+    m_logPanel->appendLog("→ RTL 実行");
 }
 
 void MainWindow::onModeChanged(int modeIndex)
@@ -294,5 +355,6 @@ void MainWindow::onModeChanged(int modeIndex)
     if (combo) {
         uint32_t mode = combo->itemData(modeIndex).toUInt();
         m_flightController->setFlightMode(mode);
+        m_logPanel->appendLog(QString("→ モード変更: %1").arg(combo->itemText(modeIndex)));
     }
 }

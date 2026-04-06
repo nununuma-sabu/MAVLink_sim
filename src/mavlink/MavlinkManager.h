@@ -46,6 +46,10 @@ public:
     void sendGlobalPositionInt();
     void sendBatteryStatus();
     void sendVfrHud();
+    void sendAutopilotVersion();
+
+    /// 任意のMAVLinkメッセージを送信
+    void sendRawMessage(const mavlink_message_t &msg);
 
     /// COMMAND_ACK を送信
     void sendCommandAck(uint16_t command, uint8_t result, uint8_t targetSys, uint8_t targetComp);
