@@ -259,6 +259,13 @@ void DroneSimulator::updateGuided(double dt)
             land();
             return;
         }
+
+        // AUTOモードではwaypointReachedを通知
+        // MissionManagerが次のWPをセットする
+        if (m_state.flight_mode == FlightMode::AUTO) {
+            emit waypointReached();
+            return;
+        }
     }
 
     // 高度調整

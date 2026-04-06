@@ -1,4 +1,5 @@
 #include <QApplication>
+#include <QFont>
 #include "gui/MainWindow.h"
 
 int main(int argc, char *argv[])
@@ -8,6 +9,11 @@ int main(int argc, char *argv[])
     app.setApplicationName("MAVLink Drone Simulator");
     app.setOrganizationName("MAVLink_sim");
     app.setApplicationVersion("1.0.0");
+
+    // 日本語フォント設定（豆腐防止）
+    QFont appFont("Noto Sans CJK JP", 10);
+    appFont.setStyleHint(QFont::SansSerif);
+    app.setFont(appFont);
 
     // ダークテーマのパレット
     QPalette darkPalette;

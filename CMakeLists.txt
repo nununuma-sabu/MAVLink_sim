@@ -23,6 +23,8 @@ set(CORE_SOURCES
     src/core/DroneSimulator.cpp
     src/core/FlightController.h
     src/core/FlightController.cpp
+    src/core/MissionManager.h
+    src/core/MissionManager.cpp
 )
 
 set(MAVLINK_SOURCES
@@ -49,6 +51,8 @@ set(GUI_SOURCES
     src/gui/ControlPanel.cpp
     src/gui/LogPanel.h
     src/gui/LogPanel.cpp
+    src/gui/MissionPanel.h
+    src/gui/MissionPanel.cpp
 )
 
 add_executable(${PROJECT_NAME}

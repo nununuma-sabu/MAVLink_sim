@@ -1,5 +1,6 @@
 #include "MavlinkManager.h"
 #include "MavlinkUdpLink.h"
+#include "core/MissionManager.h"
 #include <QDebug>
 #include <QtMath>
 
@@ -245,5 +246,96 @@ void MavlinkManager::sendAutopilotVersion()
 
 void MavlinkManager::sendRawMessage(const mavlink_message_t &msg)
 {
+    m_link->sendMessage(msg);
+}
+
+// ============================================================
+// ミッションプロトコル送信
+// ============================================================
+
+void MavlinkManager::sendMissionCount(uint16_t count, uint8_t targetSys, uint8_t targetComp)
+{
+    mavlink_message_t msg;
+    mavlink_msg_mission_count_pack(
+        m_sysId, m_compId, &msg,
+        targetSys, targetComp,
+        count,
+        MAV_MISSION_TYPE_MISSION,
+        0  // opaque_id
+    );
+    m_link->sendMessage(msg);
+}
+
+void MavlinkManager::sendMissionItemInt(const MissionItem &item, uint8_t targetSys, uint8_t targetComp)
+{
+    mavlink_message_t msg;
+    mavlink_msg_mission_item_int_pack(
+        m_sysId, m_compId, &msg,
+        targetSys, targetComp,
+        item.seq,
+        item.frame,
+        item.command,
+        item.current,
+        item.autocontinue,
+        item.param1,
+        item.param2,
+        item.param3,
+        item.param4,
+        static_cast<int32_t>(item.latitude * 1e7),
+        static_cast<int32_t>(item.longitude * 1e7),
+        static_cast<float>(item.altitude),
+        MAV_MISSION_TYPE_MISSION
+    );
+    m_link->sendMessage(msg);
+}
+
+void MavlinkManager::sendMissionAck(uint8_t type, uint8_t targetSys, uint8_t targetComp)
+{
+    mavlink_message_t msg;
+    mavlink_msg_mission_ack_pack(
+        m_sysId, m_compId, &msg,
+        targetSys, targetComp,
+        type,
+        MAV_MISSION_TYPE_MISSION,
+        0  // opaque_id
+    );
+    m_link->sendMessage(msg);
+}
+
+void MavlinkManager::sendMissionCurrent(uint16_t seq)
+{
+    mavlink_message_t msg;
+    mavlink_msg_mission_current_pack(
+        m_sysId, m_compId, &msg,
+        seq,
+        0,    // total
+        0,    // mission_state
+        0,    // mission_mode
+        0,    // mission_id
+        0,    // fence_id
+        0     // rally_points_id
+    );
+    m_link->sendMessage(msg);
+}
+
+void MavlinkManager::sendMissionItemReached(uint16_t seq)
+{
+    mavlink_message_t msg;
+    mavlink_msg_mission_item_reached_pack(
+        m_sysId, m_compId, &msg,
+        seq
+    );
+    m_link->sendMessage(msg);
+}
+
+void MavlinkManager::sendMissionRequestInt(uint16_t seq, uint8_t targetSys, uint8_t targetComp)
+{
+    mavlink_message_t msg;
+    mavlink_msg_mission_request_int_pack(
+        m_sysId, m_compId, &msg,
+        targetSys, targetComp,
+        seq,
+        MAV_MISSION_TYPE_MISSION
+    );
     m_link->sendMessage(msg);
 }

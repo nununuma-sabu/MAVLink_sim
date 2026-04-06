@@ -5,8 +5,10 @@
 #include "MapView3D.h"
 #include "ControlPanel.h"
 #include "LogPanel.h"
+#include "MissionPanel.h"
 #include "core/DroneSimulator.h"
 #include "core/FlightController.h"
+#include "core/MissionManager.h"
 #include "mavlink/MavlinkUdpLink.h"
 #include "mavlink/MavlinkManager.h"
 #include "mavlink/MessageHandler.h"
@@ -29,9 +31,10 @@ MainWindow::MainWindow(QWidget *parent)
     // コンポーネント初期化
     m_simulator = new DroneSimulator(this);
     m_flightController = new FlightController(m_simulator, this);
+    m_missionManager = new MissionManager(m_simulator, this);
     m_udpLink = new MavlinkUdpLink(this);
     m_mavManager = new MavlinkManager(m_udpLink, this);
-    m_msgHandler = new MessageHandler(m_mavManager, m_flightController, this);
+    m_msgHandler = new MessageHandler(m_mavManager, m_flightController, m_missionManager, this);
 
     setupStyle();
     setupUi();
@@ -193,14 +196,26 @@ void MainWindow::setupUi()
     mapTabs->addTab(m_mapView3D, "3D ビュー");
     mapTabs->addTab(m_mapView, "2D マップ");
 
-    // 右パネル（操作）
+    // 右パネル（操作 / ミッション タブ）
     m_controlPanel = new ControlPanel();
-    m_controlPanel->setMinimumWidth(220);
-    m_controlPanel->setMaximumWidth(280);
+    m_missionPanel = new MissionPanel(m_missionManager);
+
+    auto *rightTabs = new QTabWidget();
+    rightTabs->setStyleSheet(
+        "QTabWidget::pane { border: 1px solid #3a3a42; background: #1e1e23; }"
+        "QTabBar::tab { background: #2a2a32; color: #999; padding: 6px 16px; "
+        "border: 1px solid #3a3a42; border-bottom: none; border-top-left-radius: 4px; "
+        "border-top-right-radius: 4px; margin-right: 2px; }"
+        "QTabBar::tab:selected { background: #1e1e23; color: #fff; }"
+        "QTabBar::tab:hover { background: #35353e; }");
+    rightTabs->addTab(m_controlPanel, "操作");
+    rightTabs->addTab(m_missionPanel, "ミッション");
+    rightTabs->setMinimumWidth(240);
+    rightTabs->setMaximumWidth(320);
 
     mainSplitter->addWidget(leftWidget);
     mainSplitter->addWidget(mapTabs);
-    mainSplitter->addWidget(m_controlPanel);
+    mainSplitter->addWidget(rightTabs);
     mainSplitter->setStretchFactor(0, 0);
     mainSplitter->setStretchFactor(1, 1);
     mainSplitter->setStretchFactor(2, 0);
@@ -285,6 +300,38 @@ void MainWindow::setupConnections()
             this, &MainWindow::onModeChanged);
     connect(m_controlPanel, &ControlPanel::manualInputChanged,
             m_simulator, &DroneSimulator::setManualInput);
+
+    // === ミッション関連 ===
+
+    // MissionManager → マップ表示更新
+    connect(m_missionManager, &MissionManager::itemsChanged, [this]() {
+        m_mapView->setWaypoints(m_missionManager->items());
+        m_mapView3D->setWaypoints(m_missionManager->items());
+    });
+    connect(m_missionManager, &MissionManager::currentWaypointChanged, [this](int index) {
+        m_mapView->setActiveWaypoint(index);
+        m_mapView3D->setActiveWaypoint(index);
+    });
+
+    // MissionManager → MAVLink通知
+    connect(m_missionManager, &MissionManager::currentWaypointChanged, [this](int index) {
+        if (index >= 0) {
+            m_mavManager->sendMissionCurrent(static_cast<uint16_t>(index));
+        }
+    });
+    connect(m_missionManager, &MissionManager::waypointReached, [this](int index) {
+        m_mavManager->sendMissionItemReached(static_cast<uint16_t>(index));
+        m_logPanel->appendLog(QString("→ MISSION_ITEM_REACHED seq:%1").arg(index));
+    });
+    connect(m_missionManager, &MissionManager::statusMessage,
+            m_logPanel, &LogPanel::appendLog);
+
+    // マップクリック → MissionPanel にWP追加
+    connect(m_mapView, &MapView::waypointAddRequested, [this](double lat, double lon) {
+        m_missionPanel->addWaypointFromMap(lat, lon);
+        m_logPanel->appendLog(QString("マップクリック WP追加: %1, %2")
+                              .arg(lat, 0, 'f', 5).arg(lon, 0, 'f', 5));
+    });
 }
 
 void MainWindow::onStateUpdated(const DroneState &state)

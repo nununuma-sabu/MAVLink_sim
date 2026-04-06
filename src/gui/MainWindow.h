@@ -16,6 +16,8 @@ class MapView;
 class MapView3D;
 class ControlPanel;
 class LogPanel;
+class MissionPanel;
+class MissionManager;
 
 struct DroneState;
 
@@ -61,6 +63,10 @@ private:
     MapView           *m_mapView;
     MapView3D         *m_mapView3D;
     ControlPanel      *m_controlPanel;
+
+    // Mission
+    MissionManager    *m_missionManager;
+    MissionPanel      *m_missionPanel;
 
     // ステータスバー
     QLabel *m_lblStatus;

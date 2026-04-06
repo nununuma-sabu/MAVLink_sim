@@ -44,6 +44,8 @@ public:
 signals:
     /// 状態更新時に発火 (10ms間隔)
     void stateUpdated(const DroneState &state);
+    /// ウェイポイント到着時に発火 (AUTOモード)
+    void waypointReached();
 
 private slots:
     void simulationStep();

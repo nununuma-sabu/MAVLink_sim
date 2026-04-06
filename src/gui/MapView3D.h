@@ -10,6 +10,8 @@
 #include <QVector>
 #include <QTimer>
 
+struct MissionItem;
+
 /**
  * @brief 3Dドローンマップビュー
  *
@@ -34,6 +36,11 @@ public:
     /// 飛行経路をクリア
     void clearTrace();
 
+    /// ウェイポイント表示を更新
+    void setWaypoints(const QVector<MissionItem> &items);
+    /// アクティブWPをハイライト
+    void setActiveWaypoint(int index);
+
     QSize minimumSizeHint() const override { return QSize(400, 300); }
 
 protected:
@@ -55,6 +62,7 @@ private:
     void drawAltitudeLine();
     void drawHomeMarker();
     void drawHUD();
+    void drawWaypoints();
 
     QVector3D geoToLocal(double lat, double lon, double alt) const;
 
@@ -87,6 +95,15 @@ private:
     // アニメーション
     float m_propellerAngle = 0.0f;
     QTimer m_animTimer;
+
+    // ウェイポイント
+    struct WpData {
+        QVector3D pos;
+        uint16_t command;
+        int seq;
+    };
+    QVector<WpData> m_waypoints;
+    int m_activeWpIndex = -1;
 };
 
 #endif // MAPVIEW3D_H

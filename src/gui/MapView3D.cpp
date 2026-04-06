@@ -1,4 +1,5 @@
 #include "MapView3D.h"
+#include "core/MissionManager.h"
 #include <QtMath>
 #include <QPainter>
 #include <QDebug>
@@ -140,6 +141,7 @@ void MapView3D::paintGL()
     drawTrace();
     drawShadow();
     drawAltitudeLine();
+    drawWaypoints();
     drawDrone();
 
     // HUD (2D overlay)
@@ -520,4 +522,104 @@ void MapView3D::wheelEvent(QWheelEvent *event)
     m_cameraDistance *= (1.0f - delta * 0.1f);
     m_cameraDistance = qBound(5.0f, m_cameraDistance, 200.0f);
     update();
+}
+
+// ============================================================
+// ウェイポイント
+// ============================================================
+
+void MapView3D::setWaypoints(const QVector<MissionItem> &items)
+{
+    m_waypoints.clear();
+    for (int i = 0; i < items.size(); i++) {
+        WpData wp;
+        wp.pos = geoToLocal(items[i].latitude, items[i].longitude, items[i].altitude);
+        wp.command = items[i].command;
+        wp.seq = i;
+        m_waypoints.append(wp);
+    }
+    update();
+}
+
+void MapView3D::setActiveWaypoint(int index)
+{
+    m_activeWpIndex = index;
+    update();
+}
+
+void MapView3D::drawWaypoints()
+{
+    if (m_waypoints.isEmpty()) return;
+
+    // 経路ライン（破線風に）
+    glLineWidth(2.0f);
+    glBegin(GL_LINE_STRIP);
+    for (int i = 0; i < m_waypoints.size(); i++) {
+        const auto &wp = m_waypoints[i];
+        if (i == m_activeWpIndex) {
+            glColor4f(1.0f, 0.78f, 0.0f, 0.9f); // 黄
+        } else {
+            glColor4f(0.9f, 0.3f, 0.24f, 0.7f); // 赤
+        }
+        glVertex3f(wp.pos.x(), wp.pos.y(), wp.pos.z());
+    }
+    glEnd();
+
+    // WPマーカー（球体の代わりに八角形ダイヤモンド）
+    for (int i = 0; i < m_waypoints.size(); i++) {
+        const auto &wp = m_waypoints[i];
+
+        bool isActive = (i == m_activeWpIndex);
+        float r = isActive ? 1.2f : 0.8f;
+
+        glPushMatrix();
+        glTranslatef(wp.pos.x(), wp.pos.y(), wp.pos.z());
+
+        // ポイントマーカー
+        if (isActive) {
+            glColor4f(1.0f, 0.78f, 0.0f, 0.9f); // 黄
+        } else {
+            glColor4f(0.9f, 0.3f, 0.24f, 0.8f); // 赤
+        }
+
+        // 3Dダイヤモンド（上下のピラミッド）
+        float h = r * 0.7f;
+        glBegin(GL_TRIANGLE_FAN);
+        glVertex3f(0, h, 0); // 頂点
+        for (int j = 0; j <= 8; j++) {
+            float a = qDegreesToRadians(j * 45.0f);
+            glVertex3f(r * qCos(a), 0, r * qSin(a));
+        }
+        glEnd();
+
+        glBegin(GL_TRIANGLE_FAN);
+        glVertex3f(0, -h, 0); // 底点
+        for (int j = 0; j <= 8; j++) {
+            float a = qDegreesToRadians(j * 45.0f);
+            glVertex3f(r * qCos(a), 0, r * qSin(a));
+        }
+        glEnd();
+
+        // 地面への垂直線
+        glLineWidth(1.0f);
+        glEnable(GL_LINE_STIPPLE);
+        glLineStipple(2, 0xAAAA);
+        glColor4f(0.9f, 0.3f, 0.24f, 0.3f);
+        glBegin(GL_LINES);
+        glVertex3f(0, 0, 0);
+        glVertex3f(0, -wp.pos.y(), 0);
+        glEnd();
+        glDisable(GL_LINE_STIPPLE);
+
+        // 地面マーカー
+        glColor4f(0.9f, 0.3f, 0.24f, 0.2f);
+        glBegin(GL_LINE_LOOP);
+        for (int j = 0; j < 12; j++) {
+            float a = qDegreesToRadians(j * 30.0f);
+            glVertex3f(r * 0.6f * qCos(a), -wp.pos.y() + 0.02f, r * 0.6f * qSin(a));
+        }
+        glEnd();
+
+        glPopMatrix();
+    }
 }

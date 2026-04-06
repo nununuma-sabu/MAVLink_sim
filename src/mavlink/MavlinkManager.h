@@ -12,6 +12,7 @@
 #include "core/DroneState.h"
 
 class MavlinkUdpLink;
+struct MissionItem;
 
 /**
  * @brief MAVLink メッセージ送受信管理
@@ -53,6 +54,14 @@ public:
 
     /// COMMAND_ACK を送信
     void sendCommandAck(uint16_t command, uint8_t result, uint8_t targetSys, uint8_t targetComp);
+
+    // === ミッションプロトコル送信 ===
+    void sendMissionCount(uint16_t count, uint8_t targetSys, uint8_t targetComp);
+    void sendMissionItemInt(const MissionItem &item, uint8_t targetSys, uint8_t targetComp);
+    void sendMissionAck(uint8_t type, uint8_t targetSys, uint8_t targetComp);
+    void sendMissionCurrent(uint16_t seq);
+    void sendMissionItemReached(uint16_t seq);
+    void sendMissionRequestInt(uint16_t seq, uint8_t targetSys, uint8_t targetComp);
 
 signals:
     /// コマンド受信

@@ -5,8 +5,11 @@
 #include <QGraphicsScene>
 #include <QGraphicsEllipseItem>
 #include <QGraphicsPathItem>
+#include <QGraphicsTextItem>
 #include <QVector>
 #include <QPointF>
+
+struct MissionItem;
 
 /**
  * @brief 2Dトップダウンマップビュー
@@ -30,9 +33,21 @@ public:
     /// トレースをクリア
     void clearTrace();
 
+    /// ウェイポイント表示を更新
+    void setWaypoints(const QVector<MissionItem> &items);
+    /// アクティブWPをハイライト
+    void setActiveWaypoint(int index);
+    /// ウェイポイント表示をクリア
+    void clearWaypoints();
+
+signals:
+    /// マップクリックでWP追加要求
+    void waypointAddRequested(double lat, double lon);
+
 protected:
     void wheelEvent(QWheelEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
 
 private:
     void setupScene();
@@ -59,6 +74,12 @@ private:
 
     // スケール (ピクセル/メートル)
     double m_scale = 5.0;
+
+    // ウェイポイント表示
+    QVector<QGraphicsEllipseItem*> m_wpMarkers;
+    QVector<QGraphicsTextItem*> m_wpLabels;
+    QGraphicsPathItem *m_wpPathItem = nullptr;
+    int m_activeWpIndex = -1;
 };
 
 #endif // MAPVIEW_H

@@ -1,5 +1,7 @@
 #include "MapView.h"
+#include "core/MissionManager.h"
 #include <QWheelEvent>
+#include <QMouseEvent>
 #include <QtMath>
 #include <QGraphicsTextItem>
 
@@ -46,6 +48,11 @@ void MapView::setupScene()
                                        QBrush(QColor(255, 200, 0, 200)));
     m_droneItem->setZValue(10);
     m_droneItem->setTransformOriginPoint(0, 0);
+
+    // ウェイポイント経路ライン
+    m_wpPathItem = m_scene->addPath(QPainterPath(),
+        QPen(QColor(231, 76, 60, 150), 1.5, Qt::DashLine));
+    m_wpPathItem->setZValue(4);
 
     // 初期ズーム
     scale(1.5, 1.5);
@@ -143,4 +150,102 @@ void MapView::wheelEvent(QWheelEvent *event)
 void MapView::resizeEvent(QResizeEvent *event)
 {
     QGraphicsView::resizeEvent(event);
+}
+
+void MapView::mousePressEvent(QMouseEvent *event)
+{
+    // Ctrl+クリックでウェイポイント追加
+    if (event->modifiers() & Qt::ControlModifier &&
+        event->button() == Qt::LeftButton) {
+        QPointF scenePos = mapToScene(event->pos());
+        // シーン座標 → 地理座標に変換
+        double dlon = scenePos.x() / m_scale;
+        double dlat = -scenePos.y() / m_scale;
+        double lat = m_homeLat + dlat / 111320.0;
+        double lon = m_homeLon + dlon / (111320.0 * qCos(qDegreesToRadians(m_homeLat)));
+        emit waypointAddRequested(lat, lon);
+        return;
+    }
+    QGraphicsView::mousePressEvent(event);
+}
+
+// ============================================================
+// ウェイポイント表示
+// ============================================================
+
+void MapView::setWaypoints(const QVector<MissionItem> &items)
+{
+    clearWaypoints();
+
+    QPainterPath wpPath;
+
+    for (int i = 0; i < items.size(); i++) {
+        const auto &wp = items[i];
+        QPointF pos = geoToScene(wp.latitude, wp.longitude);
+
+        // マーカー（円）
+        double r = 6.0;
+        QColor markerColor = (i == m_activeWpIndex)
+            ? QColor(255, 200, 0)     // アクティブ: 黄
+            : QColor(231, 76, 60);    // 通常: 赤
+
+        auto *marker = m_scene->addEllipse(
+            -r, -r, r * 2, r * 2,
+            QPen(markerColor, 2),
+            QBrush(markerColor.lighter(150)));
+        marker->setPos(pos);
+        marker->setZValue(7);
+        m_wpMarkers.append(marker);
+
+        // 番号ラベル
+        auto *label = m_scene->addText(QString::number(i + 1));
+        label->setDefaultTextColor(Qt::white);
+        label->setPos(pos.x() + r + 2, pos.y() - r - 2);
+        label->setZValue(8);
+        QFont f = label->font();
+        f.setPixelSize(10);
+        f.setBold(true);
+        label->setFont(f);
+        m_wpLabels.append(label);
+
+        // 経路ライン
+        if (i == 0) {
+            wpPath.moveTo(pos);
+        } else {
+            wpPath.lineTo(pos);
+        }
+    }
+
+    m_wpPathItem->setPath(wpPath);
+}
+
+void MapView::setActiveWaypoint(int index)
+{
+    m_activeWpIndex = index;
+
+    // マーカーの色を更新
+    for (int i = 0; i < m_wpMarkers.size(); i++) {
+        QColor color = (i == index)
+            ? QColor(255, 200, 0)
+            : QColor(231, 76, 60);
+        m_wpMarkers[i]->setPen(QPen(color, 2));
+        m_wpMarkers[i]->setBrush(QBrush(color.lighter(150)));
+    }
+}
+
+void MapView::clearWaypoints()
+{
+    for (auto *marker : m_wpMarkers) {
+        m_scene->removeItem(marker);
+        delete marker;
+    }
+    m_wpMarkers.clear();
+
+    for (auto *label : m_wpLabels) {
+        m_scene->removeItem(label);
+        delete label;
+    }
+    m_wpLabels.clear();
+
+    m_wpPathItem->setPath(QPainterPath());
 }
