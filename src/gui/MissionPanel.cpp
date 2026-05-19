@@ -96,23 +96,25 @@ void MissionPanel::setupUi()
         "selection-background-color: #3498db; }");
     addLayout->addRow("コマンド:", m_cmbCommand);
 
-    // 緯度
-    m_spinLat = new QDoubleSpinBox();
-    m_spinLat->setRange(-90.0, 90.0);
-    m_spinLat->setDecimals(7);
-    m_spinLat->setValue(35.6815);
-    m_spinLat->setSingleStep(0.0001);
-    m_spinLat->setStyleSheet(spinStyle);
-    addLayout->addRow("緯度:", m_spinLat);
+    // 北方向オフセット
+    m_spinNorth = new QDoubleSpinBox();
+    m_spinNorth->setRange(-10000.0, 10000.0);
+    m_spinNorth->setDecimals(1);
+    m_spinNorth->setValue(100.0);
+    m_spinNorth->setSingleStep(10.0);
+    m_spinNorth->setSuffix(" m");
+    m_spinNorth->setStyleSheet(spinStyle);
+    addLayout->addRow("北方向:", m_spinNorth);
 
-    // 経度
-    m_spinLon = new QDoubleSpinBox();
-    m_spinLon->setRange(-180.0, 180.0);
-    m_spinLon->setDecimals(7);
-    m_spinLon->setValue(139.7675);
-    m_spinLon->setSingleStep(0.0001);
-    m_spinLon->setStyleSheet(spinStyle);
-    addLayout->addRow("経度:", m_spinLon);
+    // 東方向オフセット
+    m_spinEast = new QDoubleSpinBox();
+    m_spinEast->setRange(-10000.0, 10000.0);
+    m_spinEast->setDecimals(1);
+    m_spinEast->setValue(60.0);
+    m_spinEast->setSingleStep(10.0);
+    m_spinEast->setSuffix(" m");
+    m_spinEast->setStyleSheet(spinStyle);
+    addLayout->addRow("東方向:", m_spinEast);
 
     // 高度
     m_spinAlt = new QDoubleSpinBox();
@@ -225,8 +227,9 @@ void MissionPanel::onAddClicked()
     MissionItem item;
     item.command = static_cast<uint16_t>(
         m_cmbCommand->currentData().toUInt());
-    item.latitude = m_spinLat->value();
-    item.longitude = m_spinLon->value();
+    item.coordinateMode = MissionItem::CoordinateMode::Relative;
+    item.north_m = m_spinNorth->value();
+    item.east_m = m_spinEast->value();
     item.altitude = m_spinAlt->value();
     m_manager->addItem(item);
 }
@@ -267,8 +270,8 @@ void MissionPanel::onItemSelected(int row)
 {
     if (row >= 0 && row < m_manager->itemCount()) {
         const auto &item = m_manager->items().at(row);
-        m_spinLat->setValue(item.latitude);
-        m_spinLon->setValue(item.longitude);
+        m_spinNorth->setValue(item.north_m);
+        m_spinEast->setValue(item.east_m);
         m_spinAlt->setValue(item.altitude);
     }
 }
@@ -277,6 +280,7 @@ void MissionPanel::addWaypointFromMap(double lat, double lon)
 {
     MissionItem item;
     item.command = MavCmd::NAV_WAYPOINT;
+    item.coordinateMode = MissionItem::CoordinateMode::Global;
     item.latitude = lat;
     item.longitude = lon;
     item.altitude = m_spinAlt->value(); // 現在設定中の高度を使用
@@ -289,11 +293,11 @@ void MissionPanel::refreshList()
     const auto &items = m_manager->items();
     for (int i = 0; i < items.size(); i++) {
         const auto &item = items[i];
-        QString text = QString("#%1  %2  %3, %4  %5m")
+        QString text = QString("#%1  %2  N%3m E%4m  %5m")
             .arg(i + 1, 2)
             .arg(item.commandName(), -10)
-            .arg(item.latitude, 0, 'f', 5)
-            .arg(item.longitude, 0, 'f', 5)
+            .arg(item.north_m, 0, 'f', 1)
+            .arg(item.east_m, 0, 'f', 1)
             .arg(item.altitude, 0, 'f', 1);
         m_listWidget->addItem(text);
     }

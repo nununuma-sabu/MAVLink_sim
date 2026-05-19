@@ -11,6 +11,11 @@
  * MAVLink MISSION_ITEM_INT 互換のウェイポイントデータ。
  */
 struct MissionItem {
+    enum class CoordinateMode : uint8_t {
+        Global = 0,
+        Relative = 1
+    };
+
     uint16_t seq         = 0;       // シーケンス番号
     uint16_t command     = 16;      // MAV_CMD (デフォルト: NAV_WAYPOINT)
     uint8_t  frame       = 3;       // MAV_FRAME_GLOBAL_RELATIVE_ALT
@@ -20,8 +25,11 @@ struct MissionItem {
     float    param2      = 0.0f;    // Accept radius (m)
     float    param3      = 0.0f;    // Pass through (0) / orbit
     float    param4      = 0.0f;    // Yaw angle (deg)
-    double   latitude    = 0.0;     // 緯度 [deg]
-    double   longitude   = 0.0;     // 経度 [deg]
+    CoordinateMode coordinateMode = CoordinateMode::Global;
+    double   latitude    = 0.0;     // 緯度 [deg] (MAVLink互換/解決済み位置)
+    double   longitude   = 0.0;     // 経度 [deg] (MAVLink互換/解決済み位置)
+    double   north_m     = 0.0;     // ホームから北方向の相対位置 [m]
+    double   east_m      = 0.0;     // ホームから東方向の相対位置 [m]
     double   altitude    = 0.0;     // 高度 [m] (相対)
 
     /**
@@ -128,6 +136,8 @@ private:
     void executeItem(const MissionItem &item);
     void onMissionComplete();
     void renumberItems();
+    MissionItem resolvedItem(const MissionItem &item) const;
+    void resolveStoredPosition(MissionItem &item) const;
 
     DroneSimulator *m_sim;
     QVector<MissionItem> m_items;

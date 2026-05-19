@@ -19,6 +19,7 @@ add_definitions(-DMAVLINK_USE_MESSAGE_INFO)
 # ソースファイル
 set(CORE_SOURCES
     src/core/DroneState.h
+    src/core/GeoUtils.h
     src/core/DroneSimulator.h
     src/core/DroneSimulator.cpp
     src/core/FlightController.h

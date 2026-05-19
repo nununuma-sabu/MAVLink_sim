@@ -1,5 +1,6 @@
 #include "MapView3D.h"
 #include "core/MissionManager.h"
+#include "core/GeoUtils.h"
 #include <QtMath>
 #include <QPainter>
 #include <QDebug>
@@ -21,12 +22,11 @@ MapView3D::MapView3D(QWidget *parent)
 
 QVector3D MapView3D::geoToLocal(double lat, double lon, double alt) const
 {
-    double dlat = (lat - m_homeLat) * 111320.0;
-    double dlon = (lon - m_homeLon) * 111320.0 * qCos(qDegreesToRadians(m_homeLat));
+    const auto offset = Geo::geoToRelative(m_homeLat, m_homeLon, lat, lon);
     // OpenGL座標: X=East, Y=Up, Z=South (右手系)
-    return QVector3D(static_cast<float>(dlon),
+    return QVector3D(static_cast<float>(offset.east),
                      static_cast<float>(alt),
-                     static_cast<float>(-dlat));
+                     static_cast<float>(-offset.north));
 }
 
 void MapView3D::setHome(double latitude, double longitude)
@@ -533,7 +533,13 @@ void MapView3D::setWaypoints(const QVector<MissionItem> &items)
     m_waypoints.clear();
     for (int i = 0; i < items.size(); i++) {
         WpData wp;
-        wp.pos = geoToLocal(items[i].latitude, items[i].longitude, items[i].altitude);
+        if (items[i].coordinateMode == MissionItem::CoordinateMode::Relative) {
+            wp.pos = QVector3D(static_cast<float>(items[i].east_m),
+                               static_cast<float>(items[i].altitude),
+                               static_cast<float>(-items[i].north_m));
+        } else {
+            wp.pos = geoToLocal(items[i].latitude, items[i].longitude, items[i].altitude);
+        }
         wp.command = items[i].command;
         wp.seq = i;
         m_waypoints.append(wp);

@@ -1,5 +1,6 @@
 #include "MissionManager.h"
 #include "DroneSimulator.h"
+#include "GeoUtils.h"
 #include <QDebug>
 
 MissionManager::MissionManager(DroneSimulator *simulator, QObject *parent)
@@ -19,6 +20,7 @@ void MissionManager::addItem(const MissionItem &item)
 {
     MissionItem newItem = item;
     newItem.seq = static_cast<uint16_t>(m_items.size());
+    resolveStoredPosition(newItem);
     m_items.append(newItem);
     emit itemsChanged();
 }
@@ -26,7 +28,9 @@ void MissionManager::addItem(const MissionItem &item)
 void MissionManager::insertItem(int index, const MissionItem &item)
 {
     if (index < 0 || index > m_items.size()) return;
-    m_items.insert(index, item);
+    MissionItem newItem = item;
+    resolveStoredPosition(newItem);
+    m_items.insert(index, newItem);
     renumberItems();
     emit itemsChanged();
 }
@@ -52,6 +56,9 @@ void MissionManager::clearAll()
 void MissionManager::setItems(const QVector<MissionItem> &items)
 {
     m_items = items;
+    for (auto &item : m_items) {
+        resolveStoredPosition(item);
+    }
     renumberItems();
     emit itemsChanged();
 }
@@ -170,21 +177,25 @@ void MissionManager::advanceToNextWaypoint()
 
 void MissionManager::executeItem(const MissionItem &item)
 {
-    qDebug() << "[MissionManager] 実行: WP" << item.seq
-             << item.commandName()
-             << "lat:" << item.latitude
-             << "lon:" << item.longitude
-             << "alt:" << item.altitude;
+    const MissionItem resolved = resolvedItem(item);
 
-    switch (item.command) {
+    qDebug() << "[MissionManager] 実行: WP" << resolved.seq
+             << resolved.commandName()
+             << "N:" << resolved.north_m
+             << "E:" << resolved.east_m
+             << "lat:" << resolved.latitude
+             << "lon:" << resolved.longitude
+             << "alt:" << resolved.altitude;
+
+    switch (resolved.command) {
     case MavCmd::NAV_WAYPOINT:
         // 通常のウェイポイント飛行
-        m_sim->setTargetPosition(item.latitude, item.longitude, item.altitude);
+        m_sim->setTargetPosition(resolved.latitude, resolved.longitude, resolved.altitude);
         break;
 
     case MavCmd::NAV_TAKEOFF:
         // 離陸（高度のみ使用）
-        m_sim->takeoff(item.altitude);
+        m_sim->takeoff(resolved.altitude);
         break;
 
     case MavCmd::NAV_LAND:
@@ -199,28 +210,53 @@ void MissionManager::executeItem(const MissionItem &item)
 
     case MavCmd::NAV_LOITER_UNLIM:
         // 無期限ホバリング（ミッション進行しない）
-        m_sim->setTargetPosition(item.latitude, item.longitude, item.altitude);
+        m_sim->setTargetPosition(resolved.latitude, resolved.longitude, resolved.altitude);
         // autocontinue=0なので自動進行しない
         break;
 
     case MavCmd::NAV_LOITER_TIME: {
         // 一定時間ホバリング（param1=秒）
-        m_sim->setTargetPosition(item.latitude, item.longitude, item.altitude);
+        m_sim->setTargetPosition(resolved.latitude, resolved.longitude, resolved.altitude);
         // TODO: タイマーで param1 秒後に次のWPへ進む
         // 現在は到着即次WPで簡易実装
         break;
     }
 
     default:
-        qDebug() << "[MissionManager] 未対応コマンド:" << item.command;
+        qDebug() << "[MissionManager] 未対応コマンド:" << resolved.command;
         // 未対応コマンドはスキップ
         advanceToNextWaypoint();
         break;
     }
 
     emit statusMessage(QString("WP #%1 %2 実行中")
-                       .arg(item.seq + 1)
-                       .arg(item.commandName()));
+                       .arg(resolved.seq + 1)
+                       .arg(resolved.commandName()));
+}
+
+MissionItem MissionManager::resolvedItem(const MissionItem &item) const
+{
+    MissionItem resolved = item;
+    resolveStoredPosition(resolved);
+    return resolved;
+}
+
+void MissionManager::resolveStoredPosition(MissionItem &item) const
+{
+    if (!m_sim) return;
+
+    const double homeLat = m_sim->homeLatitude();
+    const double homeLon = m_sim->homeLongitude();
+
+    if (item.coordinateMode == MissionItem::CoordinateMode::Relative) {
+        const auto point = Geo::relativeToGeo(homeLat, homeLon, item.north_m, item.east_m);
+        item.latitude = point.latitude;
+        item.longitude = point.longitude;
+    } else {
+        const auto offset = Geo::geoToRelative(homeLat, homeLon, item.latitude, item.longitude);
+        item.north_m = offset.north;
+        item.east_m = offset.east;
+    }
 }
 
 void MissionManager::onMissionComplete()

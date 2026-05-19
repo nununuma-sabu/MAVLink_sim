@@ -51,8 +51,8 @@ private:
 
     // UI要素
     QListWidget    *m_listWidget;
-    QDoubleSpinBox *m_spinLat;
-    QDoubleSpinBox *m_spinLon;
+    QDoubleSpinBox *m_spinNorth;
+    QDoubleSpinBox *m_spinEast;
     QDoubleSpinBox *m_spinAlt;
     QComboBox      *m_cmbCommand;
     QComboBox      *m_cmbCompletionAction;

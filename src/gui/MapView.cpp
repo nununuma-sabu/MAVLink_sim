@@ -1,5 +1,6 @@
 #include "MapView.h"
 #include "core/MissionManager.h"
+#include "core/GeoUtils.h"
 #include <QWheelEvent>
 #include <QMouseEvent>
 #include <QtMath>
@@ -96,11 +97,10 @@ void MapView::drawGrid()
 QPointF MapView::geoToScene(double lat, double lon) const
 {
     // ホーム位置からのオフセット (メートル) → シーン座標
-    double dlat = (lat - m_homeLat) * 111320.0;
-    double dlon = (lon - m_homeLon) * 111320.0 * qCos(qDegreesToRadians(m_homeLat));
+    const auto offset = Geo::geoToRelative(m_homeLat, m_homeLon, lat, lon);
 
     // NED → シーン座標 (Y軸反転: 北が上)
-    return QPointF(dlon * m_scale, -dlat * m_scale);
+    return QPointF(offset.east * m_scale, -offset.north * m_scale);
 }
 
 void MapView::setHome(double latitude, double longitude)
@@ -159,11 +159,10 @@ void MapView::mousePressEvent(QMouseEvent *event)
         event->button() == Qt::LeftButton) {
         QPointF scenePos = mapToScene(event->pos());
         // シーン座標 → 地理座標に変換
-        double dlon = scenePos.x() / m_scale;
-        double dlat = -scenePos.y() / m_scale;
-        double lat = m_homeLat + dlat / 111320.0;
-        double lon = m_homeLon + dlon / (111320.0 * qCos(qDegreesToRadians(m_homeLat)));
-        emit waypointAddRequested(lat, lon);
+        const double east = scenePos.x() / m_scale;
+        const double north = -scenePos.y() / m_scale;
+        const auto point = Geo::relativeToGeo(m_homeLat, m_homeLon, north, east);
+        emit waypointAddRequested(point.latitude, point.longitude);
         return;
     }
     QGraphicsView::mousePressEvent(event);
@@ -181,7 +180,9 @@ void MapView::setWaypoints(const QVector<MissionItem> &items)
 
     for (int i = 0; i < items.size(); i++) {
         const auto &wp = items[i];
-        QPointF pos = geoToScene(wp.latitude, wp.longitude);
+        QPointF pos = (wp.coordinateMode == MissionItem::CoordinateMode::Relative)
+            ? QPointF(wp.east_m * m_scale, -wp.north_m * m_scale)
+            : geoToScene(wp.latitude, wp.longitude);
 
         // マーカー（円）
         double r = 6.0;

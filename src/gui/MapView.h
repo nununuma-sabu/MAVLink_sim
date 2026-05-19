@@ -8,6 +8,7 @@
 #include <QGraphicsTextItem>
 #include <QVector>
 #include <QPointF>
+#include "core/GeoUtils.h"
 
 struct MissionItem;
 
@@ -64,8 +65,8 @@ private:
     QGraphicsEllipseItem *m_homeItem = nullptr;
 
     // ホーム位置
-    double m_homeLat = 35.6812;
-    double m_homeLon = 139.7671;
+    double m_homeLat = Geo::NerimaStationLat;
+    double m_homeLon = Geo::NerimaStationLon;
     bool m_homeSet = false;
 
     // トレース

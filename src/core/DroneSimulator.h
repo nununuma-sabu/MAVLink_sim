@@ -5,6 +5,7 @@
 #include <QTimer>
 #include <QElapsedTimer>
 #include "DroneState.h"
+#include "GeoUtils.h"
 
 /**
  * @brief 位置ベースのドローンシミュレーター
@@ -28,6 +29,9 @@ public:
     /// 現在の状態を取得
     const DroneState& state() const { return m_state; }
     DroneState& state() { return m_state; }
+    double homeLatitude() const { return m_homeLat; }
+    double homeLongitude() const { return m_homeLon; }
+    double homeAltitude() const { return m_homeAlt; }
 
     // === コマンド ===
     bool arm();
@@ -68,8 +72,8 @@ private:
     QElapsedTimer m_elapsedTimer;
 
     // ホームポジション
-    double m_homeLat = 35.6812;
-    double m_homeLon = 139.7671;
+    double m_homeLat = Geo::NerimaStationLat;
+    double m_homeLon = Geo::NerimaStationLon;
     double m_homeAlt = 0.0;
 
     // 手動入力

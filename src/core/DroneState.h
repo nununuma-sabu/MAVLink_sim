@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <QString>
+#include "GeoUtils.h"
 
 /**
  * @brief フライトモード定義
@@ -25,8 +26,8 @@ enum class FlightMode : uint8_t {
  */
 struct DroneState {
     // === 位置 (WGS84) ===
-    double latitude  = 35.6812;   // 緯度 [deg] (デフォルト: 東京)
-    double longitude = 139.7671;  // 経度 [deg]
+    double latitude  = Geo::NerimaStationLat;   // 緯度 [deg] (デフォルト: 練馬駅)
+    double longitude = Geo::NerimaStationLon;   // 経度 [deg]
     double altitude  = 0.0;       // 高度 [m] (対地)
     double altitude_msl = 0.0;    // 高度 [m] (海抜)
 

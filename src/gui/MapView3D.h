@@ -9,6 +9,7 @@
 #include <QWheelEvent>
 #include <QVector>
 #include <QTimer>
+#include "core/GeoUtils.h"
 
 struct MissionItem;
 
@@ -78,8 +79,8 @@ private:
     bool m_panning  = false;
 
     // ホーム位置
-    double m_homeLat = 35.6812;
-    double m_homeLon = 139.7671;
+    double m_homeLat = Geo::NerimaStationLat;
+    double m_homeLon = Geo::NerimaStationLon;
     bool m_homeSet = false;
 
     // ドローン状態
