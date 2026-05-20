@@ -91,6 +91,15 @@
       "camera": { "distance": 155, "angle_x": 46, "angle_y": -38 }
     },
     {
+      "id": "k_arena_yokohama",
+      "name": "Kアリーナ横浜",
+      "category": "landmark",
+      "latitude": 35.464595,
+      "longitude": 139.630639,
+      "radius_m": 350,
+      "camera": { "distance": 130, "angle_x": 42, "angle_y": -38 }
+    },
+    {
       "id": "nagoya_station",
       "name": "名古屋駅",
       "category": "station",
