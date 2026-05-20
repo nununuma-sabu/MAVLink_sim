@@ -5,6 +5,8 @@ C++ / Qt5 / MAVLink によるドローンのソフトウェアシミュレータ
 練馬駅周辺を初期位置とし、MAVLinkテレメトリ、ミッション飛行、2D/3D表示を備えたデスクトップアプリです。
 3Dビューでは OpenStreetMap / Overpass API から取得した建物、道路、線路を表示し、取得できない場合は同梱サンプル地形にフォールバックします。
 
+![OSM建物・道路・線路を表示した3Dビュー](docs/images/3d-osm-view.png)
+
 ## 主な機能
 
 - MAVLink UDP通信（QGroundControl 連携）
