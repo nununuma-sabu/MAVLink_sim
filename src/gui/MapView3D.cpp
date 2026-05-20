@@ -468,16 +468,10 @@ void MapView3D::drawBuildings()
         if (building.footprint.size() < 3) continue;
 
         const QColor base = building.color;
+        const float h = building.height;
         const float r = base.redF();
         const float g = base.greenF();
         const float b = base.blueF();
-        const float h = building.height;
-
-        QVector3D center(0, 0, 0);
-        for (const QVector2D &point : building.footprint) {
-            center += buildingPointToLocal(point, h);
-        }
-        center /= static_cast<float>(building.footprint.size());
 
         // 壁面
         glBegin(GL_QUADS);
@@ -501,32 +495,141 @@ void MapView3D::drawBuildings()
         }
         glEnd();
 
-        // 屋上
-        glBegin(GL_TRIANGLE_FAN);
-        glColor4f(qMin(r * 1.18f + 0.03f, 1.0f),
-                  qMin(g * 1.18f + 0.03f, 1.0f),
-                  qMin(b * 1.18f + 0.03f, 1.0f),
-                  0.96f);
-        glVertex3f(center.x(), h, center.z());
-        for (int i = 0; i <= building.footprint.size(); i++) {
-            const QVector3D p = buildingPointToLocal(
-                building.footprint[i % building.footprint.size()], h);
-            glVertex3f(p.x(), p.y(), p.z());
-        }
-        glEnd();
-
-        // 外形線
-        glLineWidth(1.0f);
-        glColor4f(0.08f, 0.09f, 0.10f, 0.65f);
-        glBegin(GL_LINE_LOOP);
-        for (const QVector2D &point : building.footprint) {
-            const QVector3D p = buildingPointToLocal(point, h + 0.02f);
-            glVertex3f(p.x(), p.y(), p.z());
-        }
-        glEnd();
+        drawRoof(building);
 
         drawBuildingDetails(building);
     }
+}
+
+void MapView3D::drawRoof(const BuildingData &building)
+{
+    if (building.footprint.size() < 3) return;
+
+    const float h = building.height;
+    const QColor roof = building.roofColor.isValid()
+        ? building.roofColor
+        : building.color.lighter(115);
+    const float r = roof.redF();
+    const float g = roof.greenF();
+    const float b = roof.blueF();
+    const QString shape = building.roofShape.toLower();
+
+    QVector<QVector3D> topPoints;
+    topPoints.reserve(building.footprint.size());
+    QVector3D center(0, 0, 0);
+    float minX = 0.0f;
+    float maxX = 0.0f;
+    float minZ = 0.0f;
+    float maxZ = 0.0f;
+
+    for (const QVector2D &point : building.footprint) {
+        const QVector3D p = buildingPointToLocal(point, h);
+        if (topPoints.isEmpty()) {
+            minX = maxX = p.x();
+            minZ = maxZ = p.z();
+        } else {
+            minX = qMin(minX, p.x());
+            maxX = qMax(maxX, p.x());
+            minZ = qMin(minZ, p.z());
+            maxZ = qMax(maxZ, p.z());
+        }
+        topPoints.append(p);
+        center += p;
+    }
+    center /= static_cast<float>(topPoints.size());
+
+    auto drawFlatRoof = [&]() {
+        glBegin(GL_TRIANGLE_FAN);
+        glColor4f(qMin(r * 1.10f + 0.03f, 1.0f),
+                  qMin(g * 1.10f + 0.03f, 1.0f),
+                  qMin(b * 1.10f + 0.03f, 1.0f),
+                  0.96f);
+        glVertex3f(center.x(), h, center.z());
+        for (int i = 0; i <= topPoints.size(); i++) {
+            const QVector3D p = topPoints[i % topPoints.size()];
+            glVertex3f(p.x(), p.y(), p.z());
+        }
+        glEnd();
+    };
+
+    const float spanX = maxX - minX;
+    const float spanZ = maxZ - minZ;
+    const bool boxRoof = topPoints.size() == 4 && spanX > 3.0f && spanZ > 3.0f;
+    const float roofHeight = qBound(1.2f, h * 0.16f, 6.0f);
+
+    if (!boxRoof || shape == "flat") {
+        drawFlatRoof();
+    } else if (shape == "pyramidal") {
+        const QVector3D apex(center.x(), h + roofHeight, center.z());
+        glBegin(GL_TRIANGLES);
+        for (int i = 0; i < topPoints.size(); i++) {
+            const QVector3D a = topPoints[i];
+            const QVector3D c = topPoints[(i + 1) % topPoints.size()];
+            const float shade = 0.92f + 0.10f * (i % 2);
+            glColor4f(qMin(r * shade, 1.0f), qMin(g * shade, 1.0f), qMin(b * shade, 1.0f), 0.98f);
+            glVertex3f(a.x(), a.y(), a.z());
+            glVertex3f(c.x(), c.y(), c.z());
+            glVertex3f(apex.x(), apex.y(), apex.z());
+        }
+        glEnd();
+    } else {
+        const bool ridgeAlongX = spanX >= spanZ;
+        const float cx = (minX + maxX) * 0.5f;
+        const float cz = (minZ + maxZ) * 0.5f;
+        const float insetX = shape == "hipped" && ridgeAlongX ? spanX * 0.22f : 0.0f;
+        const float insetZ = shape == "hipped" && !ridgeAlongX ? spanZ * 0.22f : 0.0f;
+
+        const QVector3D p00(minX, h, minZ);
+        const QVector3D p10(maxX, h, minZ);
+        const QVector3D p11(maxX, h, maxZ);
+        const QVector3D p01(minX, h, maxZ);
+
+        if (ridgeAlongX) {
+            const QVector3D r0(minX + insetX, h + roofHeight, cz);
+            const QVector3D r1(maxX - insetX, h + roofHeight, cz);
+            glBegin(GL_QUADS);
+            glColor4f(r * 0.92f, g * 0.92f, b * 0.92f, 0.98f);
+            glVertex3f(p00.x(), p00.y(), p00.z()); glVertex3f(p10.x(), p10.y(), p10.z());
+            glVertex3f(r1.x(), r1.y(), r1.z()); glVertex3f(r0.x(), r0.y(), r0.z());
+            glColor4f(qMin(r * 1.04f, 1.0f), qMin(g * 1.04f, 1.0f), qMin(b * 1.04f, 1.0f), 0.98f);
+            glVertex3f(r0.x(), r0.y(), r0.z()); glVertex3f(r1.x(), r1.y(), r1.z());
+            glVertex3f(p11.x(), p11.y(), p11.z()); glVertex3f(p01.x(), p01.y(), p01.z());
+            glEnd();
+
+            glBegin(GL_TRIANGLES);
+            glColor4f(r * 0.86f, g * 0.86f, b * 0.86f, 0.98f);
+            glVertex3f(p00.x(), p00.y(), p00.z()); glVertex3f(r0.x(), r0.y(), r0.z()); glVertex3f(p01.x(), p01.y(), p01.z());
+            glColor4f(qMin(r * 1.0f, 1.0f), qMin(g * 1.0f, 1.0f), qMin(b * 1.0f, 1.0f), 0.98f);
+            glVertex3f(p10.x(), p10.y(), p10.z()); glVertex3f(p11.x(), p11.y(), p11.z()); glVertex3f(r1.x(), r1.y(), r1.z());
+            glEnd();
+        } else {
+            const QVector3D r0(cx, h + roofHeight, minZ + insetZ);
+            const QVector3D r1(cx, h + roofHeight, maxZ - insetZ);
+            glBegin(GL_QUADS);
+            glColor4f(r * 0.92f, g * 0.92f, b * 0.92f, 0.98f);
+            glVertex3f(p00.x(), p00.y(), p00.z()); glVertex3f(r0.x(), r0.y(), r0.z());
+            glVertex3f(r1.x(), r1.y(), r1.z()); glVertex3f(p01.x(), p01.y(), p01.z());
+            glColor4f(qMin(r * 1.04f, 1.0f), qMin(g * 1.04f, 1.0f), qMin(b * 1.04f, 1.0f), 0.98f);
+            glVertex3f(r0.x(), r0.y(), r0.z()); glVertex3f(p10.x(), p10.y(), p10.z());
+            glVertex3f(p11.x(), p11.y(), p11.z()); glVertex3f(r1.x(), r1.y(), r1.z());
+            glEnd();
+
+            glBegin(GL_TRIANGLES);
+            glColor4f(r * 0.86f, g * 0.86f, b * 0.86f, 0.98f);
+            glVertex3f(p00.x(), p00.y(), p00.z()); glVertex3f(p10.x(), p10.y(), p10.z()); glVertex3f(r0.x(), r0.y(), r0.z());
+            glColor4f(qMin(r * 1.0f, 1.0f), qMin(g * 1.0f, 1.0f), qMin(b * 1.0f, 1.0f), 0.98f);
+            glVertex3f(p01.x(), p01.y(), p01.z()); glVertex3f(r1.x(), r1.y(), r1.z()); glVertex3f(p11.x(), p11.y(), p11.z());
+            glEnd();
+        }
+    }
+
+    glLineWidth(1.0f);
+    glColor4f(0.08f, 0.09f, 0.10f, 0.65f);
+    glBegin(GL_LINE_LOOP);
+    for (const QVector3D &p : topPoints) {
+        glVertex3f(p.x(), p.y() + 0.03f, p.z());
+    }
+    glEnd();
 }
 
 void MapView3D::drawBuildingDetails(const BuildingData &building)

@@ -61,6 +61,8 @@
       "name": "Station North Block",
       "height": 18.0,
       "color": "#7c8a96",
+      "roof_shape": "gabled",
+      "roof_color": "#667280",
       "footprint": [
         { "north": 18.0, "east": -58.0 },
         { "north": 18.0, "east": -8.0 },
@@ -73,6 +75,8 @@
       "name": "Station South Block",
       "height": 14.0,
       "color": "#8f7f6c",
+      "roof_shape": "hipped",
+      "roof_color": "#7e6f5f",
       "footprint": [
         { "north": -48.0, "east": -42.0 },
         { "north": -48.0, "east": 18.0 },
@@ -85,6 +89,8 @@
       "name": "East Commercial A",
       "height": 24.0,
       "color": "#6f8890",
+      "roof_shape": "flat",
+      "roof_color": "#7e9aa2",
       "footprint": [
         { "north": 12.0, "east": 42.0 },
         { "north": 12.0, "east": 74.0 },
@@ -97,6 +103,8 @@
       "name": "East Commercial B",
       "height": 10.0,
       "color": "#899174",
+      "roof_shape": "pyramidal",
+      "roof_color": "#9ca57e",
       "footprint": [
         { "north": -34.0, "east": 46.0 },
         { "north": -34.0, "east": 88.0 },
@@ -109,6 +117,8 @@
       "name": "West Residential",
       "height": 12.0,
       "color": "#817c91",
+      "roof_shape": "gabled",
+      "roof_color": "#746f86",
       "footprint": [
         { "north": -6.0, "east": -118.0 },
         { "north": -6.0, "east": -82.0 },
@@ -121,6 +131,8 @@
       "name": "North Tower",
       "height": 32.0,
       "color": "#738396",
+      "roof_shape": "flat",
+      "roof_color": "#8496aa",
       "footprint": [
         { "north": 86.0, "east": -20.0 },
         { "north": 86.0, "east": 16.0 },
@@ -133,6 +145,8 @@
       "name": "South Lane Shops",
       "height": 8.0,
       "color": "#927b76",
+      "roof_shape": "gabled",
+      "roof_color": "#a0847e",
       "footprint": [
         { "north": -96.0, "east": -18.0 },
         { "north": -96.0, "east": 52.0 },

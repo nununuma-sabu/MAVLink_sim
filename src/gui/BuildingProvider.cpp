@@ -60,6 +60,46 @@ QColor colorForIndex(int index)
     return colors[index % (sizeof(colors) / sizeof(colors[0]))];
 }
 
+QString roofShapeFromTags(const QJsonObject &tags)
+{
+    const QString shape = tags.value("roof:shape").toString().toLower();
+    if (shape == "gabled" || shape == "hipped" || shape == "pyramidal") {
+        return shape;
+    }
+    return "flat";
+}
+
+QString inferredRoofShape(const BuildingData &building, int index)
+{
+    if (building.footprint.size() != 4 || building.height > 18.0f) {
+        return "flat";
+    }
+
+    const int pattern = index % 5;
+    if (pattern == 0 || pattern == 3) {
+        return "gabled";
+    }
+    if (pattern == 1) {
+        return "hipped";
+    }
+    if (pattern == 2 && building.height < 12.0f) {
+        return "pyramidal";
+    }
+    return "flat";
+}
+
+QColor roofColorFromTags(const QJsonObject &tags, const QColor &fallback)
+{
+    const QString colorName = tags.value("roof:colour").toString(
+        tags.value("roof:color").toString());
+    if (colorName.isEmpty()) {
+        return fallback.lighter(115);
+    }
+
+    const QColor parsed(colorName);
+    return parsed.isValid() ? parsed : fallback.lighter(115);
+}
+
 float pathWidthFromTags(const QJsonObject &tags)
 {
     if (tags.contains("railway")) {
@@ -201,7 +241,7 @@ QString BuildingProvider::cachePath(double latitude, double longitude, int radiu
         .arg(latitude, 0, 'f', 5)
         .arg(longitude, 0, 'f', 5)
         .arg(radiusMeters);
-    return QDir(base).filePath("building_cache/" + key + "_v2.json");
+    return QDir(base).filePath("building_cache/" + key + "_v3.json");
 }
 
 QString BuildingProvider::buildOverpassQuery(double latitude, double longitude, int radiusMeters) const
@@ -257,10 +297,16 @@ QVector<BuildingData> BuildingProvider::parseOverpassJson(const QByteArray &data
 
         BuildingData building;
         const QJsonObject tags = way.value("tags").toObject();
+        const QString taggedRoofShape = tags.value("roof:shape").toString().toLower();
+        const bool hasTaggedRoofShape = taggedRoofShape == "gabled"
+            || taggedRoofShape == "hipped"
+            || taggedRoofShape == "pyramidal";
         building.id = QString("osm_way_%1").arg(static_cast<qint64>(way.value("id").toDouble()));
         building.name = tags.value("name").toString();
         building.height = heightFromTags(tags);
         building.color = colorForIndex(buildings.size());
+        building.roofShape = roofShapeFromTags(tags);
+        building.roofColor = roofColorFromTags(tags, building.color);
 
         for (int i = 0; i < nodeIds.size(); i++) {
             const qint64 nodeId = static_cast<qint64>(nodeIds[i].toDouble());
@@ -279,6 +325,9 @@ QVector<BuildingData> BuildingProvider::parseOverpassJson(const QByteArray &data
         }
 
         if (building.footprint.size() >= 3) {
+            if (!hasTaggedRoofShape) {
+                building.roofShape = inferredRoofShape(building, buildings.size());
+            }
             buildings.append(building);
         }
     }
@@ -375,6 +424,8 @@ QByteArray BuildingProvider::toCacheJson(const QVector<BuildingData> &buildings,
         obj["name"] = building.name;
         obj["height"] = building.height;
         obj["color"] = building.color.name();
+        obj["roof_shape"] = building.roofShape;
+        obj["roof_color"] = building.roofColor.name();
 
         QJsonArray footprint;
         for (const QVector2D &point : building.footprint) {

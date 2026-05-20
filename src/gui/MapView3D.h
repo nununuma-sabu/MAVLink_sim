@@ -70,6 +70,7 @@ private:
     void drawGroundPaths();
     void drawPathBand(const GroundPathData &path);
     void drawRailwayDetails(const GroundPathData &path);
+    void drawRoof(const BuildingData &building);
     void drawBuildingDetails(const BuildingData &building);
     void drawBuildingLabels(QPainter &painter);
 

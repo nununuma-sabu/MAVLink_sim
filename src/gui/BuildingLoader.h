@@ -12,6 +12,8 @@ struct BuildingData {
     QString name;
     float height = 8.0f;
     QColor color = QColor(108, 122, 137);
+    QString roofShape = "flat";
+    QColor roofColor = QColor(96, 96, 100);
     QVector<QVector2D> footprint;
 };
 

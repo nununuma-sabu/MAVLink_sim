@@ -61,8 +61,9 @@ QVector<BuildingData> BuildingLoader::loadFromJsonData(const QByteArray &data,
         building.id = obj.value("id").toString();
         building.name = obj.value("name").toString();
         building.height = static_cast<float>(obj.value("height").toDouble(8.0));
-
         building.color = parseColor(obj, "color", building.color);
+        building.roofShape = obj.value("roof_shape").toString(building.roofShape).toLower();
+        building.roofColor = parseColor(obj, "roof_color", building.color.lighter(115));
 
         for (const QJsonValue &pointValue : footprintArray) {
             building.footprint.append(parsePoint(pointValue.toObject()));
