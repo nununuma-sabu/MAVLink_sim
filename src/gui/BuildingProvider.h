@@ -16,6 +16,7 @@ public:
 
 signals:
     void buildingsReady(const QVector<BuildingData> &buildings, const QString &source);
+    void pathsReady(const QVector<GroundPathData> &paths, const QString &source);
     void statusMessage(const QString &message);
 
 private:
@@ -24,11 +25,16 @@ private:
     QVector<BuildingData> parseOverpassJson(const QByteArray &data,
                                             double originLat,
                                             double originLon) const;
+    QVector<GroundPathData> parseOverpassPaths(const QByteArray &data,
+                                               double originLat,
+                                               double originLon) const;
     QByteArray toCacheJson(const QVector<BuildingData> &buildings,
+                           const QVector<GroundPathData> &paths,
                            double originLat,
                            double originLon,
                            int radiusMeters) const;
     QVector<BuildingData> fallbackBuildings() const;
+    QVector<GroundPathData> fallbackPaths() const;
 
     QNetworkAccessManager m_network;
 };

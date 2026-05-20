@@ -60,6 +60,44 @@ QColor colorForIndex(int index)
     return colors[index % (sizeof(colors) / sizeof(colors[0]))];
 }
 
+float pathWidthFromTags(const QJsonObject &tags)
+{
+    if (tags.contains("railway")) {
+        return 5.0f;
+    }
+
+    const QString highway = tags.value("highway").toString();
+    if (highway == "primary" || highway == "secondary") {
+        return 9.0f;
+    }
+    if (highway == "tertiary" || highway == "residential") {
+        return 6.0f;
+    }
+    if (highway == "service") {
+        return 4.0f;
+    }
+    if (highway == "footway" || highway == "path" || highway == "pedestrian") {
+        return 2.2f;
+    }
+    return 4.5f;
+}
+
+QColor pathColorFromTags(const QJsonObject &tags)
+{
+    if (tags.contains("railway")) {
+        return QColor("#5c4b64");
+    }
+
+    const QString highway = tags.value("highway").toString();
+    if (highway == "footway" || highway == "path" || highway == "pedestrian") {
+        return QColor("#6f7465");
+    }
+    if (highway == "service") {
+        return QColor("#3d4140");
+    }
+    return QColor("#303236");
+}
+
 } // namespace
 
 BuildingProvider::BuildingProvider(QObject *parent)
@@ -72,8 +110,12 @@ void BuildingProvider::loadForOrigin(double latitude, double longitude, int radi
     const QString path = cachePath(latitude, longitude, radiusMeters);
     if (QFile::exists(path)) {
         const QVector<BuildingData> cached = BuildingLoader::loadFromJson(path);
+        const QVector<GroundPathData> cachedPaths = BuildingLoader::loadPathsFromJson(path);
         if (!cached.isEmpty()) {
-            emit statusMessage(QString("建物データ: キャッシュ (%1件)").arg(cached.size()));
+            emit statusMessage(QString("建物データ: キャッシュ (%1件 / パス%2件)")
+                               .arg(cached.size())
+                               .arg(cachedPaths.size()));
+            emit pathsReady(cachedPaths, "cache");
             emit buildingsReady(cached, "cache");
             return;
         }
@@ -81,7 +123,9 @@ void BuildingProvider::loadForOrigin(double latitude, double longitude, int radi
 
     emit statusMessage("建物データ: OSM取得中");
     const QVector<BuildingData> preview = fallbackBuildings();
+    const QVector<GroundPathData> previewPaths = fallbackPaths();
     if (!preview.isEmpty()) {
+        emit pathsReady(previewPaths, "sample-preview");
         emit buildingsReady(preview, "sample-preview");
     }
 
@@ -108,17 +152,26 @@ void BuildingProvider::loadForOrigin(double latitude, double longitude, int radi
                        << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt()
                        << reply->errorString();
             const auto fallback = fallbackBuildings();
-            emit statusMessage(QString("建物データ: サンプル (%1件 / OSM取得失敗)").arg(fallback.size()));
+            const auto fallbackPathData = fallbackPaths();
+            emit statusMessage(QString("建物データ: サンプル (%1件 / パス%2件 / OSM取得失敗)")
+                               .arg(fallback.size())
+                               .arg(fallbackPathData.size()));
+            emit pathsReady(fallbackPathData, "sample");
             emit buildingsReady(fallback, "sample");
             return;
         }
 
         const QByteArray body = reply->readAll();
         const QVector<BuildingData> buildings = parseOverpassJson(body, latitude, longitude);
+        const QVector<GroundPathData> paths = parseOverpassPaths(body, latitude, longitude);
         if (buildings.isEmpty()) {
             qWarning() << "[BuildingProvider] OSM建物データが空です";
             const auto fallback = fallbackBuildings();
-            emit statusMessage(QString("建物データ: サンプル (%1件)").arg(fallback.size()));
+            const auto fallbackPathData = fallbackPaths();
+            emit statusMessage(QString("建物データ: サンプル (%1件 / パス%2件)")
+                               .arg(fallback.size())
+                               .arg(fallbackPathData.size()));
+            emit pathsReady(fallbackPathData, "sample");
             emit buildingsReady(fallback, "sample");
             return;
         }
@@ -126,10 +179,13 @@ void BuildingProvider::loadForOrigin(double latitude, double longitude, int radi
         QFile cacheFile(path);
         QDir().mkpath(QFileInfo(path).absolutePath());
         if (cacheFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-            cacheFile.write(toCacheJson(buildings, latitude, longitude, radiusMeters));
+            cacheFile.write(toCacheJson(buildings, paths, latitude, longitude, radiusMeters));
         }
 
-        emit statusMessage(QString("建物データ: OSM取得 (%1件)").arg(buildings.size()));
+        emit statusMessage(QString("建物データ: OSM取得 (%1件 / パス%2件)")
+                           .arg(buildings.size())
+                           .arg(paths.size()));
+        emit pathsReady(paths, "osm");
         emit buildingsReady(buildings, "osm");
     });
 }
@@ -145,7 +201,7 @@ QString BuildingProvider::cachePath(double latitude, double longitude, int radiu
         .arg(latitude, 0, 'f', 5)
         .arg(longitude, 0, 'f', 5)
         .arg(radiusMeters);
-    return QDir(base).filePath("building_cache/" + key + ".json");
+    return QDir(base).filePath("building_cache/" + key + "_v2.json");
 }
 
 QString BuildingProvider::buildOverpassQuery(double latitude, double longitude, int radiusMeters) const
@@ -154,6 +210,8 @@ QString BuildingProvider::buildOverpassQuery(double latitude, double longitude, 
         "[out:json][timeout:10];"
         "("
         "way[\"building\"](around:%1,%2,%3);"
+        "way[\"highway\"](around:%1,%2,%3);"
+        "way[\"railway\"](around:%1,%2,%3);"
         ");"
         "out body;"
         ">;"
@@ -229,7 +287,74 @@ QVector<BuildingData> BuildingProvider::parseOverpassJson(const QByteArray &data
     return buildings;
 }
 
+QVector<GroundPathData> BuildingProvider::parseOverpassPaths(const QByteArray &data,
+                                                             double originLat,
+                                                             double originLon) const
+{
+    QVector<GroundPathData> paths;
+
+    QJsonParseError parseError;
+    const QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+        qWarning() << "[BuildingProvider] OverpassパスJSON解析失敗:" << parseError.errorString();
+        return paths;
+    }
+
+    QHash<qint64, Geo::GeoPoint> nodes;
+    QVector<QJsonObject> ways;
+
+    const QJsonArray elements = doc.object().value("elements").toArray();
+    for (const QJsonValue &value : elements) {
+        const QJsonObject obj = value.toObject();
+        const QString type = obj.value("type").toString();
+        if (type == "node") {
+            nodes.insert(static_cast<qint64>(obj.value("id").toDouble()),
+                         {obj.value("lat").toDouble(), obj.value("lon").toDouble()});
+        } else if (type == "way") {
+            const QJsonObject tags = obj.value("tags").toObject();
+            if (tags.contains("highway") || tags.contains("railway")) {
+                ways.append(obj);
+            }
+        }
+    }
+
+    for (const QJsonObject &way : ways) {
+        const QJsonObject tags = way.value("tags").toObject();
+        const QJsonArray nodeIds = way.value("nodes").toArray();
+        if (nodeIds.size() < 2) {
+            continue;
+        }
+
+        GroundPathData path;
+        path.id = QString("osm_path_%1").arg(static_cast<qint64>(way.value("id").toDouble()));
+        path.type = tags.contains("railway") ? "railway" : tags.value("highway").toString();
+        path.width = pathWidthFromTags(tags);
+        path.color = pathColorFromTags(tags);
+
+        for (const QJsonValue &nodeValue : nodeIds) {
+            const qint64 nodeId = static_cast<qint64>(nodeValue.toDouble());
+            if (!nodes.contains(nodeId)) {
+                path.points.clear();
+                break;
+            }
+            const auto geo = nodes.value(nodeId);
+            const auto offset = Geo::geoToRelative(originLat, originLon,
+                                                   geo.latitude, geo.longitude);
+            path.points.append(QVector2D(static_cast<float>(offset.east),
+                                         static_cast<float>(offset.north)));
+        }
+
+        if (path.points.size() >= 2) {
+            paths.append(path);
+        }
+    }
+
+    qDebug() << "[BuildingProvider] OSM地表パス変換:" << paths.size() << "件";
+    return paths;
+}
+
 QByteArray BuildingProvider::toCacheJson(const QVector<BuildingData> &buildings,
+                                         const QVector<GroundPathData> &paths,
                                          double originLat,
                                          double originLon,
                                          int radiusMeters) const
@@ -263,10 +388,35 @@ QByteArray BuildingProvider::toCacheJson(const QVector<BuildingData> &buildings,
     }
     root["buildings"] = buildingArray;
 
+    QJsonArray pathArray;
+    for (const GroundPathData &path : paths) {
+        QJsonObject obj;
+        obj["id"] = path.id;
+        obj["type"] = path.type;
+        obj["width"] = path.width;
+        obj["color"] = path.color.name();
+
+        QJsonArray points;
+        for (const QVector2D &point : path.points) {
+            QJsonObject pointObj;
+            pointObj["east"] = point.x();
+            pointObj["north"] = point.y();
+            points.append(pointObj);
+        }
+        obj["points"] = points;
+        pathArray.append(obj);
+    }
+    root["paths"] = pathArray;
+
     return QJsonDocument(root).toJson(QJsonDocument::Indented);
 }
 
 QVector<BuildingData> BuildingProvider::fallbackBuildings() const
 {
     return BuildingLoader::loadFromJson(":/buildings/nerima_sample.json");
+}
+
+QVector<GroundPathData> BuildingProvider::fallbackPaths() const
+{
+    return BuildingLoader::loadPathsFromJson(":/buildings/nerima_sample.json");
 }

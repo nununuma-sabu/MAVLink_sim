@@ -28,8 +28,8 @@ struct DroneState {
     // === 位置 (WGS84) ===
     double latitude  = Geo::NerimaStationLat;   // 緯度 [deg] (デフォルト: 練馬駅)
     double longitude = Geo::NerimaStationLon;   // 経度 [deg]
-    double altitude  = 0.0;       // 高度 [m] (対地)
-    double altitude_msl = 0.0;    // 高度 [m] (海抜)
+    double altitude  = 50.0;      // 高度 [m] (対地)
+    double altitude_msl = 100.0;  // 高度 [m] (海抜)
 
     // === 姿勢 [rad] ===
     double roll  = 0.0;

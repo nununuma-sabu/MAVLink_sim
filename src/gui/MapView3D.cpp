@@ -27,6 +27,12 @@ MapView3D::MapView3D(QWidget *parent)
         qDebug() << "[MapView3D] 建物データ適用:" << buildings.size() << "件 source:" << source;
         update();
     });
+    connect(m_buildingProvider, &BuildingProvider::pathsReady,
+            this, [this](const QVector<GroundPathData> &paths, const QString &source) {
+        m_groundPaths = paths;
+        qDebug() << "[MapView3D] 地表パス適用:" << paths.size() << "件 source:" << source;
+        update();
+    });
     connect(m_buildingProvider, &BuildingProvider::statusMessage,
             this, [this](const QString &message) {
         m_buildingStatus = message;
@@ -48,6 +54,11 @@ QVector3D MapView3D::geoToLocal(double lat, double lon, double alt) const
 QVector3D MapView3D::buildingPointToLocal(const QVector2D &point, float altitude) const
 {
     // 建物JSONはホーム基準の East/North メートルで保持する。
+    return QVector3D(point.x(), altitude, -point.y());
+}
+
+QVector3D MapView3D::pathPointToLocal(const QVector2D &point, float altitude) const
+{
     return QVector3D(point.x(), altitude, -point.y());
 }
 
@@ -158,6 +169,7 @@ void MapView3D::paintGL()
 
     // ===== シーン描画 =====
     drawGrid();
+    drawGroundPaths();
     drawBuildings();
     drawAxes();
     drawHomeMarker();
@@ -229,6 +241,52 @@ void MapView3D::drawAxes()
     glEnd();
 }
 
+void MapView3D::drawGroundPaths()
+{
+    if (m_groundPaths.isEmpty()) return;
+
+    glDisable(GL_DEPTH_TEST);
+    for (const GroundPathData &path : m_groundPaths) {
+        if (path.points.size() < 2) continue;
+
+        const float width = qBound(1.0f, path.width, 12.0f);
+        const QColor color = path.color;
+
+        glLineWidth(width);
+        glBegin(GL_LINE_STRIP);
+        glColor4f(color.redF(), color.greenF(), color.blueF(), 0.9f);
+        for (const QVector2D &point : path.points) {
+            const QVector3D p = pathPointToLocal(point, 0.025f);
+            glVertex3f(p.x(), p.y(), p.z());
+        }
+        glEnd();
+
+        if (path.type == "railway") {
+            glLineWidth(1.0f);
+            glBegin(GL_LINE_STRIP);
+            glColor4f(0.80f, 0.76f, 0.68f, 0.85f);
+            for (const QVector2D &point : path.points) {
+                const QVector3D p = pathPointToLocal(point, 0.04f);
+                glVertex3f(p.x(), p.y(), p.z());
+            }
+            glEnd();
+        } else if (width >= 5.0f) {
+            glEnable(GL_LINE_STIPPLE);
+            glLineStipple(1, 0x00FF);
+            glLineWidth(1.0f);
+            glBegin(GL_LINE_STRIP);
+            glColor4f(0.86f, 0.82f, 0.66f, 0.55f);
+            for (const QVector2D &point : path.points) {
+                const QVector3D p = pathPointToLocal(point, 0.045f);
+                glVertex3f(p.x(), p.y(), p.z());
+            }
+            glEnd();
+            glDisable(GL_LINE_STIPPLE);
+        }
+    }
+    glEnable(GL_DEPTH_TEST);
+}
+
 void MapView3D::drawBuildings()
 {
     if (m_buildings.isEmpty()) return;
@@ -287,7 +345,68 @@ void MapView3D::drawBuildings()
             glVertex3f(p.x(), p.y(), p.z());
         }
         glEnd();
+
+        drawBuildingDetails(building);
     }
+}
+
+void MapView3D::drawBuildingDetails(const BuildingData &building)
+{
+    const float h = building.height;
+    if (building.footprint.size() < 3 || h < 5.0f) return;
+
+    // 屋上の薄い縁取り
+    glLineWidth(2.0f);
+    glColor4f(0.03f, 0.035f, 0.04f, 0.75f);
+    glBegin(GL_LINE_LOOP);
+    for (const QVector2D &point : building.footprint) {
+        const QVector3D p = buildingPointToLocal(point, h + 0.04f);
+        glVertex3f(p.x(), p.y(), p.z());
+    }
+    glEnd();
+
+    if (h < 8.0f) return;
+
+    // 窓の簡易表現。高層ほど細かく、低層は控えめに出す。
+    glBegin(GL_QUADS);
+    for (int i = 0; i < building.footprint.size(); i++) {
+        const QVector3D a = buildingPointToLocal(building.footprint[i], 0.0f);
+        const QVector3D b = buildingPointToLocal(building.footprint[(i + 1) % building.footprint.size()], 0.0f);
+        const QVector3D wall = b - a;
+        const float wallLength = qSqrt(wall.x() * wall.x() + wall.z() * wall.z());
+        if (wallLength < 8.0f) continue;
+
+        QVector3D along(wall.x() / wallLength, 0.0f, wall.z() / wallLength);
+        QVector3D normal(-along.z(), 0.0f, along.x());
+        const float offset = 0.06f;
+        const int columns = qBound(1, static_cast<int>(wallLength / 5.0f), 12);
+        const int floors = qBound(1, static_cast<int>(h / 3.2f), 12);
+
+        for (int floor = 0; floor < floors; floor++) {
+            const float y0 = 2.0f + floor * 3.0f;
+            if (y0 + 1.0f > h - 0.7f) continue;
+            for (int col = 0; col < columns; col++) {
+                if (((col + floor + i) % 4) == 0) continue;
+
+                const float t = (col + 0.5f) / columns;
+                const QVector3D center = a + along * (t * wallLength) + normal * offset;
+                const float halfW = qMin(0.75f, wallLength / columns * 0.22f);
+                const float y1 = y0 + 0.9f;
+                const QColor lit = ((col + floor) % 3 == 0)
+                    ? QColor(244, 210, 126)
+                    : QColor(95, 130, 150);
+
+                glColor4f(lit.redF(), lit.greenF(), lit.blueF(), 0.38f);
+                const QVector3D left = center - along * halfW;
+                const QVector3D right = center + along * halfW;
+                glVertex3f(left.x(), y0, left.z());
+                glVertex3f(right.x(), y0, right.z());
+                glVertex3f(right.x(), y1, right.z());
+                glVertex3f(left.x(), y1, left.z());
+            }
+        }
+    }
+    glEnd();
 }
 
 void MapView3D::drawHomeMarker()

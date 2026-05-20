@@ -66,9 +66,12 @@ private:
     void drawHUD();
     void drawWaypoints();
     void drawBuildings();
+    void drawGroundPaths();
+    void drawBuildingDetails(const BuildingData &building);
 
     QVector3D geoToLocal(double lat, double lon, double alt) const;
     QVector3D buildingPointToLocal(const QVector2D &point, float altitude) const;
+    QVector3D pathPointToLocal(const QVector2D &point, float altitude = 0.02f) const;
 
     // カメラパラメータ
     float m_cameraDistance = 40.0f;
@@ -111,6 +114,7 @@ private:
 
     // 建物
     QVector<BuildingData> m_buildings;
+    QVector<GroundPathData> m_groundPaths;
     BuildingProvider *m_buildingProvider = nullptr;
     QString m_buildingStatus = "建物データ: 未読み込み";
 };
