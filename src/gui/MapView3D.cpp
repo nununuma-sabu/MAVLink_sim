@@ -116,6 +116,21 @@ bool MapView3D::worldToScreen(const QVector3D &world, QPointF &screen) const
            screen.y() >= -30.0 && screen.y() <= height() + 30.0;
 }
 
+float MapView3D::lightForWall(const QVector3D &a, const QVector3D &b, int wallIndex) const
+{
+    QVector3D edge = b - a;
+    edge.setY(0.0f);
+    if (edge.lengthSquared() < 0.0001f) {
+        return 0.7f;
+    }
+    edge.normalize();
+    QVector3D normal(-edge.z(), 0.0f, edge.x());
+    const QVector3D sunDir = QVector3D(-0.45f, 0.0f, -0.75f).normalized();
+    const float direct = qMax(0.0f, QVector3D::dotProduct(normal, sunDir));
+    const float variation = (wallIndex % 2 == 0) ? 0.04f : -0.03f;
+    return qBound(0.45f, 0.58f + direct * 0.42f + variation, 1.08f);
+}
+
 void MapView3D::setHome(double latitude, double longitude)
 {
     m_homeLat = latitude;
@@ -163,12 +178,18 @@ void MapView3D::clearTrace()
 void MapView3D::initializeGL()
 {
     initializeOpenGLFunctions();
-    glClearColor(0.08f, 0.08f, 0.10f, 1.0f);
+    glClearColor(0.42f, 0.52f, 0.62f, 1.0f);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_LINE_SMOOTH);
     glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+    glEnable(GL_FOG);
+    GLfloat fogColor[] = {0.42f, 0.52f, 0.62f, 1.0f};
+    glFogfv(GL_FOG_COLOR, fogColor);
+    glFogi(GL_FOG_MODE, GL_LINEAR);
+    glFogf(GL_FOG_START, 260.0f);
+    glFogf(GL_FOG_END, 760.0f);
 }
 
 void MapView3D::resizeGL(int w, int h)
@@ -179,6 +200,7 @@ void MapView3D::resizeGL(int w, int h)
 void MapView3D::paintGL()
 {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    drawSkyGradient();
 
     // ===== Projection =====
     glMatrixMode(GL_PROJECTION);
@@ -222,6 +244,7 @@ void MapView3D::paintGL()
     glMultMatrixf(lookAt);
 
     // ===== シーン描画 =====
+    glEnable(GL_FOG);
     drawGrid();
     drawGroundPaths();
     drawBuildings();
@@ -232,6 +255,7 @@ void MapView3D::paintGL()
     drawAltitudeLine();
     drawWaypoints();
     drawDrone();
+    glDisable(GL_FOG);
 
     // HUD (2D overlay)
     drawHUD();
@@ -241,21 +265,50 @@ void MapView3D::paintGL()
 // 描画関数
 // ============================================================
 
+void MapView3D::drawSkyGradient()
+{
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(0, 1, 0, 1, -1, 1);
+
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_FOG);
+    glBegin(GL_QUADS);
+    glColor3f(0.33f, 0.43f, 0.54f);
+    glVertex2f(0.0f, 0.0f);
+    glVertex2f(1.0f, 0.0f);
+    glColor3f(0.62f, 0.70f, 0.78f);
+    glVertex2f(1.0f, 1.0f);
+    glVertex2f(0.0f, 1.0f);
+    glEnd();
+    glEnable(GL_DEPTH_TEST);
+
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+}
+
 void MapView3D::drawGrid()
 {
-    float gridSize = 100.0f;
-    float step = 5.0f;
+    float gridSize = 420.0f;
+    float step = 10.0f;
 
     // メイングリッド
     glLineWidth(1.0f);
     glBegin(GL_LINES);
     for (float i = -gridSize; i <= gridSize; i += step) {
-        bool major = (fmod(qAbs(i), 25.0f) < 0.01f);
+        bool major = (fmod(qAbs(i), 50.0f) < 0.01f);
 
         if (major) {
-            glColor4f(0.25f, 0.25f, 0.30f, 0.8f);
+            glColor4f(0.24f, 0.30f, 0.28f, 0.34f);
         } else {
-            glColor4f(0.15f, 0.15f, 0.18f, 0.5f);
+            glColor4f(0.17f, 0.22f, 0.20f, 0.16f);
         }
 
         // X方向 (East-West)
@@ -269,7 +322,7 @@ void MapView3D::drawGrid()
 
     // グラウンドプレーン（半透明）
     glBegin(GL_QUADS);
-    glColor4f(0.05f, 0.08f, 0.05f, 0.3f);
+    glColor4f(0.055f, 0.095f, 0.070f, 0.88f);
     glVertex3f(-gridSize, -0.01f, -gridSize);
     glVertex3f( gridSize, -0.01f, -gridSize);
     glVertex3f( gridSize, -0.01f,  gridSize);
@@ -436,8 +489,11 @@ void MapView3D::drawBuildings()
             const QVector3D b1 = buildingPointToLocal(bpt, h);
             const QVector3D a1 = buildingPointToLocal(a, h);
 
-            const float shade = (i % 2 == 0) ? 0.72f : 0.62f;
-            glColor4f(r * shade, g * shade, b * shade, 0.92f);
+            const float shade = lightForWall(a0, b0, i);
+            glColor4f(qMin(r * shade, 1.0f),
+                      qMin(g * shade, 1.0f),
+                      qMin(b * shade, 1.0f),
+                      0.94f);
             glVertex3f(a0.x(), a0.y(), a0.z());
             glVertex3f(b0.x(), b0.y(), b0.z());
             glVertex3f(b1.x(), b1.y(), b1.z());
@@ -447,7 +503,10 @@ void MapView3D::drawBuildings()
 
         // 屋上
         glBegin(GL_TRIANGLE_FAN);
-        glColor4f(qMin(r * 1.15f, 1.0f), qMin(g * 1.15f, 1.0f), qMin(b * 1.15f, 1.0f), 0.95f);
+        glColor4f(qMin(r * 1.18f + 0.03f, 1.0f),
+                  qMin(g * 1.18f + 0.03f, 1.0f),
+                  qMin(b * 1.18f + 0.03f, 1.0f),
+                  0.96f);
         glVertex3f(center.x(), h, center.z());
         for (int i = 0; i <= building.footprint.size(); i++) {
             const QVector3D p = buildingPointToLocal(

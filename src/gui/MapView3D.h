@@ -57,6 +57,7 @@ protected:
 
 private:
     void drawGrid();
+    void drawSkyGradient();
     void drawAxes();
     void drawDrone();
     void drawTrace();
@@ -76,6 +77,7 @@ private:
     QVector3D buildingPointToLocal(const QVector2D &point, float altitude) const;
     QVector3D pathPointToLocal(const QVector2D &point, float altitude = 0.02f) const;
     QVector3D buildingCenter(const BuildingData &building) const;
+    float lightForWall(const QVector3D &a, const QVector3D &b, int wallIndex) const;
     bool worldToScreen(const QVector3D &world, QPointF &screen) const;
 
     // カメラパラメータ
