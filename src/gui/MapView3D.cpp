@@ -3,6 +3,7 @@
 #include "core/GeoUtils.h"
 #include <QtMath>
 #include <QPainter>
+#include <QVector4D>
 #include <QDebug>
 
 MapView3D::MapView3D(QWidget *parent)
@@ -60,6 +61,59 @@ QVector3D MapView3D::buildingPointToLocal(const QVector2D &point, float altitude
 QVector3D MapView3D::pathPointToLocal(const QVector2D &point, float altitude) const
 {
     return QVector3D(point.x(), altitude, -point.y());
+}
+
+QVector3D MapView3D::buildingCenter(const BuildingData &building) const
+{
+    QVector3D center(0, 0, 0);
+    if (building.footprint.isEmpty()) {
+        return center;
+    }
+
+    for (const QVector2D &point : building.footprint) {
+        center += buildingPointToLocal(point, building.height);
+    }
+    return center / static_cast<float>(building.footprint.size());
+}
+
+bool MapView3D::worldToScreen(const QVector3D &world, QPointF &screen) const
+{
+    const float aspect = height() > 0
+        ? static_cast<float>(width()) / static_cast<float>(height())
+        : 1.0f;
+    const float fov = 45.0f;
+    const float nearP = 0.1f;
+    const float farP = 1000.0f;
+    const float top = nearP * qTan(qDegreesToRadians(fov / 2.0f));
+    const float right = top * aspect;
+
+    QMatrix4x4 projection;
+    projection.frustum(-right, right, -top, top, nearP, farP);
+
+    const float radX = qDegreesToRadians(m_cameraAngleX);
+    const float radY = qDegreesToRadians(m_cameraAngleY);
+    const QVector3D eye(
+        m_cameraTarget.x() + m_cameraDistance * qCos(radX) * qSin(radY),
+        m_cameraTarget.y() + m_cameraDistance * qSin(radX),
+        m_cameraTarget.z() + m_cameraDistance * qCos(radX) * qCos(radY));
+
+    QMatrix4x4 view;
+    view.lookAt(eye, m_cameraTarget, QVector3D(0, 1, 0));
+
+    const QVector4D clip = projection * view * QVector4D(world, 1.0f);
+    if (clip.w() <= 0.0f) {
+        return false;
+    }
+
+    const QVector3D ndc = clip.toVector3DAffine();
+    if (ndc.z() < -1.0f || ndc.z() > 1.0f) {
+        return false;
+    }
+
+    screen = QPointF((ndc.x() * 0.5f + 0.5f) * width(),
+                     (0.5f - ndc.y() * 0.5f) * height());
+    return screen.x() >= -80.0 && screen.x() <= width() + 80.0 &&
+           screen.y() >= -30.0 && screen.y() <= height() + 30.0;
 }
 
 void MapView3D::setHome(double latitude, double longitude)
@@ -245,46 +299,112 @@ void MapView3D::drawGroundPaths()
 {
     if (m_groundPaths.isEmpty()) return;
 
-    glDisable(GL_DEPTH_TEST);
     for (const GroundPathData &path : m_groundPaths) {
         if (path.points.size() < 2) continue;
 
-        const float width = qBound(1.0f, path.width, 12.0f);
-        const QColor color = path.color;
+        if (path.type == "railway") {
+            drawRailwayDetails(path);
+        } else {
+            drawPathBand(path);
+        }
+    }
+}
 
-        glLineWidth(width);
+void MapView3D::drawPathBand(const GroundPathData &path)
+{
+    const float halfWidth = qBound(1.0f, path.width, 14.0f) * 0.5f;
+    const QColor color = path.color;
+
+    for (int i = 0; i < path.points.size() - 1; i++) {
+        const QVector3D a = pathPointToLocal(path.points[i], 0.025f);
+        const QVector3D b = pathPointToLocal(path.points[i + 1], 0.025f);
+        QVector3D dir = b - a;
+        dir.setY(0.0f);
+        const float len = dir.length();
+        if (len < 0.01f) continue;
+        dir /= len;
+
+        const QVector3D normal(-dir.z(), 0.0f, dir.x());
+        const QVector3D aL = a + normal * halfWidth;
+        const QVector3D aR = a - normal * halfWidth;
+        const QVector3D bR = b - normal * halfWidth;
+        const QVector3D bL = b + normal * halfWidth;
+
+        glBegin(GL_QUADS);
+        glColor4f(color.redF(), color.greenF(), color.blueF(), 0.92f);
+        glVertex3f(aL.x(), aL.y(), aL.z());
+        glVertex3f(aR.x(), aR.y(), aR.z());
+        glVertex3f(bR.x(), bR.y(), bR.z());
+        glVertex3f(bL.x(), bL.y(), bL.z());
+        glEnd();
+    }
+
+    if (path.width >= 5.0f) {
+        glEnable(GL_LINE_STIPPLE);
+        glLineStipple(1, 0x00FF);
+        glLineWidth(1.4f);
         glBegin(GL_LINE_STRIP);
-        glColor4f(color.redF(), color.greenF(), color.blueF(), 0.9f);
+        glColor4f(0.88f, 0.84f, 0.62f, 0.55f);
         for (const QVector2D &point : path.points) {
-            const QVector3D p = pathPointToLocal(point, 0.025f);
+            const QVector3D p = pathPointToLocal(point, 0.055f);
             glVertex3f(p.x(), p.y(), p.z());
         }
         glEnd();
-
-        if (path.type == "railway") {
-            glLineWidth(1.0f);
-            glBegin(GL_LINE_STRIP);
-            glColor4f(0.80f, 0.76f, 0.68f, 0.85f);
-            for (const QVector2D &point : path.points) {
-                const QVector3D p = pathPointToLocal(point, 0.04f);
-                glVertex3f(p.x(), p.y(), p.z());
-            }
-            glEnd();
-        } else if (width >= 5.0f) {
-            glEnable(GL_LINE_STIPPLE);
-            glLineStipple(1, 0x00FF);
-            glLineWidth(1.0f);
-            glBegin(GL_LINE_STRIP);
-            glColor4f(0.86f, 0.82f, 0.66f, 0.55f);
-            for (const QVector2D &point : path.points) {
-                const QVector3D p = pathPointToLocal(point, 0.045f);
-                glVertex3f(p.x(), p.y(), p.z());
-            }
-            glEnd();
-            glDisable(GL_LINE_STIPPLE);
-        }
+        glDisable(GL_LINE_STIPPLE);
     }
-    glEnable(GL_DEPTH_TEST);
+}
+
+void MapView3D::drawRailwayDetails(const GroundPathData &path)
+{
+    const float railOffset = qMax(1.0f, path.width * 0.22f);
+    const QColor bed = path.color;
+
+    for (int i = 0; i < path.points.size() - 1; i++) {
+        const QVector3D a = pathPointToLocal(path.points[i], 0.03f);
+        const QVector3D b = pathPointToLocal(path.points[i + 1], 0.03f);
+        QVector3D dir = b - a;
+        dir.setY(0.0f);
+        const float len = dir.length();
+        if (len < 0.01f) continue;
+        dir /= len;
+
+        const QVector3D normal(-dir.z(), 0.0f, dir.x());
+        const float bedHalfWidth = qBound(2.5f, path.width * 0.65f, 5.0f);
+
+        glBegin(GL_QUADS);
+        glColor4f(bed.redF() * 0.75f, bed.greenF() * 0.75f, bed.blueF() * 0.75f, 0.82f);
+        glVertex3f((a + normal * bedHalfWidth).x(), a.y(), (a + normal * bedHalfWidth).z());
+        glVertex3f((a - normal * bedHalfWidth).x(), a.y(), (a - normal * bedHalfWidth).z());
+        glVertex3f((b - normal * bedHalfWidth).x(), b.y(), (b - normal * bedHalfWidth).z());
+        glVertex3f((b + normal * bedHalfWidth).x(), b.y(), (b + normal * bedHalfWidth).z());
+        glEnd();
+
+        glLineWidth(2.0f);
+        glBegin(GL_LINES);
+        glColor4f(0.76f, 0.72f, 0.66f, 0.95f);
+        const QVector3D aRailL = a + normal * railOffset;
+        const QVector3D bRailL = b + normal * railOffset;
+        const QVector3D aRailR = a - normal * railOffset;
+        const QVector3D bRailR = b - normal * railOffset;
+        glVertex3f(aRailL.x(), aRailL.y() + 0.04f, aRailL.z());
+        glVertex3f(bRailL.x(), bRailL.y() + 0.04f, bRailL.z());
+        glVertex3f(aRailR.x(), aRailR.y() + 0.04f, aRailR.z());
+        glVertex3f(bRailR.x(), bRailR.y() + 0.04f, bRailR.z());
+        glEnd();
+
+        const int sleeperCount = qBound(1, static_cast<int>(len / 5.0f), 24);
+        glLineWidth(1.5f);
+        glBegin(GL_LINES);
+        glColor4f(0.42f, 0.34f, 0.28f, 0.85f);
+        for (int s = 0; s <= sleeperCount; s++) {
+            const QVector3D c = a + dir * (len * s / sleeperCount);
+            const QVector3D left = c + normal * (railOffset + 0.45f);
+            const QVector3D right = c - normal * (railOffset + 0.45f);
+            glVertex3f(left.x(), c.y() + 0.055f, left.z());
+            glVertex3f(right.x(), c.y() + 0.055f, right.z());
+        }
+        glEnd();
+    }
 }
 
 void MapView3D::drawBuildings()
@@ -675,7 +795,63 @@ void MapView3D::drawHUD()
     painter.drawText(18, height() - 38, "左ドラッグ: 回転 | 右ドラッグ: パン");
     painter.drawText(18, height() - 22, "ホイール: ズーム");
 
+    drawBuildingLabels(painter);
+
     painter.end();
+}
+
+void MapView3D::drawBuildingLabels(QPainter &painter)
+{
+    QFont labelFont = painter.font();
+    labelFont.setPixelSize(10);
+    labelFont.setBold(true);
+    painter.setFont(labelFont);
+    const QFontMetrics metrics(labelFont);
+
+    int drawn = 0;
+    for (const BuildingData &building : m_buildings) {
+        if (building.name.isEmpty() || building.footprint.size() < 3) {
+            continue;
+        }
+        if (building.height < 10.0f && drawn >= 6) {
+            continue;
+        }
+
+        const QVector3D anchor = buildingCenter(building) + QVector3D(0, 2.0f, 0);
+        QPointF screen;
+        if (!worldToScreen(anchor, screen)) {
+            continue;
+        }
+
+        QString label = building.name;
+        if (label.size() > 18) {
+            label = label.left(17) + "...";
+        }
+
+        const int padX = 7;
+        const int padY = 4;
+        const QRect textRect = metrics.boundingRect(label);
+        QRectF bg(screen.x() - textRect.width() / 2.0 - padX,
+                  screen.y() - 28.0,
+                  textRect.width() + padX * 2.0,
+                  textRect.height() + padY * 2.0);
+
+        painter.setPen(QPen(QColor(255, 230, 150, 160), 1));
+        painter.drawLine(QPointF(screen.x(), screen.y() - 5.0),
+                         QPointF(screen.x(), screen.y() + 12.0));
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor(18, 20, 24, 175));
+        painter.drawRoundedRect(bg, 3, 3);
+        painter.setPen(QColor(235, 225, 190));
+        painter.drawText(bg.adjusted(padX, padY - 1, -padX, -padY),
+                         Qt::AlignCenter,
+                         label);
+
+        drawn++;
+        if (drawn >= 12) {
+            break;
+        }
+    }
 }
 
 // ============================================================

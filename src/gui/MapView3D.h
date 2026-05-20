@@ -67,11 +67,16 @@ private:
     void drawWaypoints();
     void drawBuildings();
     void drawGroundPaths();
+    void drawPathBand(const GroundPathData &path);
+    void drawRailwayDetails(const GroundPathData &path);
     void drawBuildingDetails(const BuildingData &building);
+    void drawBuildingLabels(QPainter &painter);
 
     QVector3D geoToLocal(double lat, double lon, double alt) const;
     QVector3D buildingPointToLocal(const QVector2D &point, float altitude) const;
     QVector3D pathPointToLocal(const QVector2D &point, float altitude = 0.02f) const;
+    QVector3D buildingCenter(const BuildingData &building) const;
+    bool worldToScreen(const QVector3D &world, QPointF &screen) const;
 
     // カメラパラメータ
     float m_cameraDistance = 40.0f;

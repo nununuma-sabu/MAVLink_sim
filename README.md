@@ -7,6 +7,8 @@ C++ / Qt5 / MAVLink によるドローンのソフトウェアシミュレータ
 
 ![OSM建物・道路・線路を表示した3Dビュー](docs/images/3d-osm-view.png)
 
+![道路の帯ポリゴン、線路表現、建物ラベルを表示した3Dビュー](docs/images/3d-osm-view-overview.png)
+
 ## 主な機能
 
 - MAVLink UDP通信（QGroundControl 連携）
