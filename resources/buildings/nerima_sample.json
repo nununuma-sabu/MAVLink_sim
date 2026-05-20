@@ -1,0 +1,93 @@
+{
+  "origin": {
+    "latitude": 35.7378,
+    "longitude": 139.6542,
+    "label": "Nerima Station"
+  },
+  "buildings": [
+    {
+      "id": "station_north_block",
+      "name": "Station North Block",
+      "height": 18.0,
+      "color": "#7c8a96",
+      "footprint": [
+        { "north": 18.0, "east": -58.0 },
+        { "north": 18.0, "east": -8.0 },
+        { "north": 54.0, "east": -8.0 },
+        { "north": 54.0, "east": -58.0 }
+      ]
+    },
+    {
+      "id": "station_south_block",
+      "name": "Station South Block",
+      "height": 14.0,
+      "color": "#8f7f6c",
+      "footprint": [
+        { "north": -48.0, "east": -42.0 },
+        { "north": -48.0, "east": 18.0 },
+        { "north": -16.0, "east": 18.0 },
+        { "north": -16.0, "east": -42.0 }
+      ]
+    },
+    {
+      "id": "east_commercial_a",
+      "name": "East Commercial A",
+      "height": 24.0,
+      "color": "#6f8890",
+      "footprint": [
+        { "north": 12.0, "east": 42.0 },
+        { "north": 12.0, "east": 74.0 },
+        { "north": 62.0, "east": 74.0 },
+        { "north": 62.0, "east": 42.0 }
+      ]
+    },
+    {
+      "id": "east_commercial_b",
+      "name": "East Commercial B",
+      "height": 10.0,
+      "color": "#899174",
+      "footprint": [
+        { "north": -34.0, "east": 46.0 },
+        { "north": -34.0, "east": 88.0 },
+        { "north": -4.0, "east": 88.0 },
+        { "north": -4.0, "east": 46.0 }
+      ]
+    },
+    {
+      "id": "west_residential",
+      "name": "West Residential",
+      "height": 12.0,
+      "color": "#817c91",
+      "footprint": [
+        { "north": -6.0, "east": -118.0 },
+        { "north": -6.0, "east": -82.0 },
+        { "north": 38.0, "east": -82.0 },
+        { "north": 38.0, "east": -118.0 }
+      ]
+    },
+    {
+      "id": "north_tower",
+      "name": "North Tower",
+      "height": 32.0,
+      "color": "#738396",
+      "footprint": [
+        { "north": 86.0, "east": -20.0 },
+        { "north": 86.0, "east": 16.0 },
+        { "north": 122.0, "east": 16.0 },
+        { "north": 122.0, "east": -20.0 }
+      ]
+    },
+    {
+      "id": "south_lane_shops",
+      "name": "South Lane Shops",
+      "height": 8.0,
+      "color": "#927b76",
+      "footprint": [
+        { "north": -96.0, "east": -18.0 },
+        { "north": -96.0, "east": 52.0 },
+        { "north": -72.0, "east": 52.0 },
+        { "north": -72.0, "east": -18.0 }
+      ]
+    }
+  ]
+}

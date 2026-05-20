@@ -245,14 +245,15 @@ void MissionManager::resolveStoredPosition(MissionItem &item) const
 {
     if (!m_sim) return;
 
-    const double homeLat = m_sim->homeLatitude();
-    const double homeLon = m_sim->homeLongitude();
-
     if (item.coordinateMode == MissionItem::CoordinateMode::Relative) {
-        const auto point = Geo::relativeToGeo(homeLat, homeLon, item.north_m, item.east_m);
+        const auto &state = m_sim->state();
+        const auto point = Geo::relativeToGeo(state.latitude, state.longitude,
+                                              item.north_m, item.east_m);
         item.latitude = point.latitude;
         item.longitude = point.longitude;
     } else {
+        const double homeLat = m_sim->homeLatitude();
+        const double homeLon = m_sim->homeLongitude();
         const auto offset = Geo::geoToRelative(homeLat, homeLon, item.latitude, item.longitude);
         item.north_m = offset.north;
         item.east_m = offset.east;

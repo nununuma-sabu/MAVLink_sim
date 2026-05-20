@@ -177,12 +177,18 @@ void MapView::setWaypoints(const QVector<MissionItem> &items)
     clearWaypoints();
 
     QPainterPath wpPath;
+    QPointF relativeCursor(0.0, 0.0);
 
     for (int i = 0; i < items.size(); i++) {
         const auto &wp = items[i];
-        QPointF pos = (wp.coordinateMode == MissionItem::CoordinateMode::Relative)
-            ? QPointF(wp.east_m * m_scale, -wp.north_m * m_scale)
-            : geoToScene(wp.latitude, wp.longitude);
+        QPointF pos;
+        if (wp.coordinateMode == MissionItem::CoordinateMode::Relative) {
+            relativeCursor += QPointF(wp.east_m * m_scale, -wp.north_m * m_scale);
+            pos = relativeCursor;
+        } else {
+            pos = geoToScene(wp.latitude, wp.longitude);
+            relativeCursor = pos;
+        }
 
         // マーカー（円）
         double r = 6.0;

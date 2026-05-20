@@ -72,7 +72,9 @@ bool DroneSimulator::takeoff(double altitude)
         return false;
     }
     m_state.takeoff_altitude = altitude;
-    m_state.flight_mode = FlightMode::GUIDED;
+    if (m_state.flight_mode != FlightMode::AUTO) {
+        m_state.flight_mode = FlightMode::GUIDED;
+    }
     m_isTakingOff = true;
     m_isLanding = false;
     qDebug() << "[DroneSimulator] Takeoff 高度:" << altitude << "m";
@@ -198,8 +200,13 @@ void DroneSimulator::updateTakeoff(double dt)
         m_state.vz = 0;
         m_state.climb_rate = 0;
         m_isTakingOff = false;
-        m_state.flight_mode = FlightMode::GUIDED;
         qDebug() << "[DroneSimulator] Takeoff完了 高度:" << m_state.altitude << "m";
+
+        if (m_state.flight_mode == FlightMode::AUTO) {
+            emit waypointReached();
+        } else {
+            m_state.flight_mode = FlightMode::GUIDED;
+        }
     }
 }
 
@@ -227,8 +234,11 @@ void DroneSimulator::updateGuided(double dt)
 
     double dist = distanceBetween(m_state.latitude, m_state.longitude,
                                   m_state.target_latitude, m_state.target_longitude);
+    double altDiff = m_state.target_altitude - m_state.altitude;
+    bool horizontalReached = (dist <= 0.5);
+    bool altitudeReached = (qAbs(altDiff) <= 0.1);
 
-    if (dist > 0.5) {
+    if (!horizontalReached) {
         double bearing = bearingBetween(m_state.latitude, m_state.longitude,
                                         m_state.target_latitude, m_state.target_longitude);
 
@@ -251,8 +261,22 @@ void DroneSimulator::updateGuided(double dt)
         m_state.vx = speed * qCos(bearing);
         m_state.vy = speed * qSin(bearing);
     } else {
-        m_state.has_target = false;
         m_state.vx = 0; m_state.vy = 0;
+    }
+
+    // 高度調整
+    if (!altitudeReached) {
+        double rate = qBound(-MAX_DESCENT_RATE, altDiff * 0.5, MAX_CLIMB_RATE);
+        m_state.altitude += rate * dt;
+        m_state.vz = -rate;
+        m_state.climb_rate = rate;
+    } else {
+        m_state.vz = 0;
+        m_state.climb_rate = 0;
+    }
+
+    if (horizontalReached && altitudeReached) {
+        m_state.has_target = false;
 
         // RTLで到着したら着陸開始
         if (m_state.flight_mode == FlightMode::RTL) {
@@ -266,18 +290,6 @@ void DroneSimulator::updateGuided(double dt)
             emit waypointReached();
             return;
         }
-    }
-
-    // 高度調整
-    double altDiff = m_state.target_altitude - m_state.altitude;
-    if (qAbs(altDiff) > 0.1) {
-        double rate = qBound(-MAX_DESCENT_RATE, altDiff * 0.5, MAX_CLIMB_RATE);
-        m_state.altitude += rate * dt;
-        m_state.vz = -rate;
-        m_state.climb_rate = rate;
-    } else {
-        m_state.vz = 0;
-        m_state.climb_rate = 0;
     }
 }
 

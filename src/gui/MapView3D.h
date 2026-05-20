@@ -10,6 +10,7 @@
 #include <QVector>
 #include <QTimer>
 #include "core/GeoUtils.h"
+#include "BuildingLoader.h"
 
 struct MissionItem;
 
@@ -64,8 +65,10 @@ private:
     void drawHomeMarker();
     void drawHUD();
     void drawWaypoints();
+    void drawBuildings();
 
     QVector3D geoToLocal(double lat, double lon, double alt) const;
+    QVector3D buildingPointToLocal(const QVector2D &point, float altitude) const;
 
     // カメラパラメータ
     float m_cameraDistance = 40.0f;
@@ -105,6 +108,9 @@ private:
     };
     QVector<WpData> m_waypoints;
     int m_activeWpIndex = -1;
+
+    // 建物
+    QVector<BuildingData> m_buildings;
 };
 
 #endif // MAPVIEW3D_H

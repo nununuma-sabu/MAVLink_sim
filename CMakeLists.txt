@@ -44,6 +44,8 @@ set(GUI_SOURCES
     src/gui/AttitudeIndicator.cpp
     src/gui/TelemetryPanel.h
     src/gui/TelemetryPanel.cpp
+    src/gui/BuildingLoader.h
+    src/gui/BuildingLoader.cpp
     src/gui/MapView.h
     src/gui/MapView.cpp
     src/gui/MapView3D.h
@@ -58,6 +60,7 @@ set(GUI_SOURCES
 
 add_executable(${PROJECT_NAME}
     src/main.cpp
+    resources/resources.qrc
     ${CORE_SOURCES}
     ${MAVLINK_SOURCES}
     ${GUI_SOURCES}

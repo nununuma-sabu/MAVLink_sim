@@ -28,8 +28,8 @@ struct MissionItem {
     CoordinateMode coordinateMode = CoordinateMode::Global;
     double   latitude    = 0.0;     // 緯度 [deg] (MAVLink互換/解決済み位置)
     double   longitude   = 0.0;     // 経度 [deg] (MAVLink互換/解決済み位置)
-    double   north_m     = 0.0;     // ホームから北方向の相対位置 [m]
-    double   east_m      = 0.0;     // ホームから東方向の相対位置 [m]
+    double   north_m     = 0.0;     // 実行時の現在地から北方向の相対位置 [m]
+    double   east_m      = 0.0;     // 実行時の現在地から東方向の相対位置 [m]
     double   altitude    = 0.0;     // 高度 [m] (相対)
 
     /**

@@ -18,6 +18,8 @@ MapView3D::MapView3D(QWidget *parent)
         update();
     });
     m_animTimer.start(33); // ~30fps
+
+    m_buildings = BuildingLoader::loadFromJson(":/buildings/nerima_sample.json");
 }
 
 QVector3D MapView3D::geoToLocal(double lat, double lon, double alt) const
@@ -27,6 +29,12 @@ QVector3D MapView3D::geoToLocal(double lat, double lon, double alt) const
     return QVector3D(static_cast<float>(offset.east),
                      static_cast<float>(alt),
                      static_cast<float>(-offset.north));
+}
+
+QVector3D MapView3D::buildingPointToLocal(const QVector2D &point, float altitude) const
+{
+    // 建物JSONはホーム基準の East/North メートルで保持する。
+    return QVector3D(point.x(), altitude, -point.y());
 }
 
 void MapView3D::setHome(double latitude, double longitude)
@@ -136,6 +144,7 @@ void MapView3D::paintGL()
 
     // ===== シーン描画 =====
     drawGrid();
+    drawBuildings();
     drawAxes();
     drawHomeMarker();
     drawTrace();
@@ -204,6 +213,67 @@ void MapView3D::drawAxes()
     glColor3f(0.2f, 0.2f, 0.8f);
     glVertex3f(0, 0.01f, 0); glVertex3f(0, 0.01f, -len);
     glEnd();
+}
+
+void MapView3D::drawBuildings()
+{
+    if (m_buildings.isEmpty()) return;
+
+    for (const auto &building : m_buildings) {
+        if (building.footprint.size() < 3) continue;
+
+        const QColor base = building.color;
+        const float r = base.redF();
+        const float g = base.greenF();
+        const float b = base.blueF();
+        const float h = building.height;
+
+        QVector3D center(0, 0, 0);
+        for (const QVector2D &point : building.footprint) {
+            center += buildingPointToLocal(point, h);
+        }
+        center /= static_cast<float>(building.footprint.size());
+
+        // 壁面
+        glBegin(GL_QUADS);
+        for (int i = 0; i < building.footprint.size(); i++) {
+            const QVector2D &a = building.footprint[i];
+            const QVector2D &bpt = building.footprint[(i + 1) % building.footprint.size()];
+            const QVector3D a0 = buildingPointToLocal(a, 0.0f);
+            const QVector3D b0 = buildingPointToLocal(bpt, 0.0f);
+            const QVector3D b1 = buildingPointToLocal(bpt, h);
+            const QVector3D a1 = buildingPointToLocal(a, h);
+
+            const float shade = (i % 2 == 0) ? 0.72f : 0.62f;
+            glColor4f(r * shade, g * shade, b * shade, 0.92f);
+            glVertex3f(a0.x(), a0.y(), a0.z());
+            glVertex3f(b0.x(), b0.y(), b0.z());
+            glVertex3f(b1.x(), b1.y(), b1.z());
+            glVertex3f(a1.x(), a1.y(), a1.z());
+        }
+        glEnd();
+
+        // 屋上
+        glBegin(GL_TRIANGLE_FAN);
+        glColor4f(qMin(r * 1.15f, 1.0f), qMin(g * 1.15f, 1.0f), qMin(b * 1.15f, 1.0f), 0.95f);
+        glVertex3f(center.x(), h, center.z());
+        for (int i = 0; i <= building.footprint.size(); i++) {
+            const QVector3D p = buildingPointToLocal(
+                building.footprint[i % building.footprint.size()], h);
+            glVertex3f(p.x(), p.y(), p.z());
+        }
+        glEnd();
+
+        // 外形線
+        glLineWidth(1.0f);
+        glColor4f(0.08f, 0.09f, 0.10f, 0.65f);
+        glBegin(GL_LINE_LOOP);
+        for (const QVector2D &point : building.footprint) {
+            const QVector3D p = buildingPointToLocal(point, h + 0.02f);
+            glVertex3f(p.x(), p.y(), p.z());
+        }
+        glEnd();
+    }
 }
 
 void MapView3D::drawHomeMarker()
@@ -531,14 +601,19 @@ void MapView3D::wheelEvent(QWheelEvent *event)
 void MapView3D::setWaypoints(const QVector<MissionItem> &items)
 {
     m_waypoints.clear();
+    QVector3D relativeCursor(0, 0, 0);
     for (int i = 0; i < items.size(); i++) {
         WpData wp;
         if (items[i].coordinateMode == MissionItem::CoordinateMode::Relative) {
-            wp.pos = QVector3D(static_cast<float>(items[i].east_m),
+            relativeCursor += QVector3D(static_cast<float>(items[i].east_m),
+                                         0.0f,
+                                         static_cast<float>(-items[i].north_m));
+            wp.pos = QVector3D(relativeCursor.x(),
                                static_cast<float>(items[i].altitude),
-                               static_cast<float>(-items[i].north_m));
+                               relativeCursor.z());
         } else {
             wp.pos = geoToLocal(items[i].latitude, items[i].longitude, items[i].altitude);
+            relativeCursor = QVector3D(wp.pos.x(), 0.0f, wp.pos.z());
         }
         wp.command = items[i].command;
         wp.seq = i;
