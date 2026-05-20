@@ -40,24 +40,24 @@ set(MAVLINK_SOURCES
 set(GUI_SOURCES
     src/gui/MainWindow.h
     src/gui/MainWindow.cpp
-    src/gui/AttitudeIndicator.h
-    src/gui/AttitudeIndicator.cpp
-    src/gui/TelemetryPanel.h
-    src/gui/TelemetryPanel.cpp
-    src/gui/BuildingLoader.h
-    src/gui/BuildingLoader.cpp
-    src/gui/BuildingProvider.h
-    src/gui/BuildingProvider.cpp
-    src/gui/MapView.h
-    src/gui/MapView.cpp
-    src/gui/MapView3D.h
-    src/gui/MapView3D.cpp
-    src/gui/ControlPanel.h
-    src/gui/ControlPanel.cpp
-    src/gui/LogPanel.h
-    src/gui/LogPanel.cpp
-    src/gui/MissionPanel.h
-    src/gui/MissionPanel.cpp
+    src/gui/panels/ControlPanel.h
+    src/gui/panels/ControlPanel.cpp
+    src/gui/panels/TelemetryPanel.h
+    src/gui/panels/TelemetryPanel.cpp
+    src/gui/panels/MissionPanel.h
+    src/gui/panels/MissionPanel.cpp
+    src/gui/panels/LogPanel.h
+    src/gui/panels/LogPanel.cpp
+    src/gui/widgets/AttitudeIndicator.h
+    src/gui/widgets/AttitudeIndicator.cpp
+    src/gui/widgets/MapView.h
+    src/gui/widgets/MapView.cpp
+    src/gui/map3d/BuildingLoader.h
+    src/gui/map3d/BuildingLoader.cpp
+    src/gui/map3d/BuildingProvider.h
+    src/gui/map3d/BuildingProvider.cpp
+    src/gui/map3d/MapView3D.h
+    src/gui/map3d/MapView3D.cpp
 )
 
 add_executable(${PROJECT_NAME}
