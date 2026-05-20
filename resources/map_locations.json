@@ -1,6 +1,33 @@
 {
   "locations": [
     {
+      "id": "sapporo_station",
+      "name": "札幌駅",
+      "category": "station",
+      "latitude": 43.0687,
+      "longitude": 141.3508,
+      "radius_m": 400,
+      "camera": { "distance": 150, "angle_x": 46, "angle_y": -40 }
+    },
+    {
+      "id": "sendai_station",
+      "name": "仙台駅",
+      "category": "station",
+      "latitude": 38.2602,
+      "longitude": 140.8824,
+      "radius_m": 380,
+      "camera": { "distance": 140, "angle_x": 45, "angle_y": -43 }
+    },
+    {
+      "id": "niigata_station",
+      "name": "新潟駅",
+      "category": "station",
+      "latitude": 37.9120,
+      "longitude": 139.0619,
+      "radius_m": 350,
+      "camera": { "distance": 125, "angle_x": 43, "angle_y": -42 }
+    },
+    {
       "id": "nerima_station",
       "name": "練馬駅",
       "category": "station",
@@ -17,24 +44,6 @@
       "longitude": 139.7104,
       "radius_m": 350,
       "camera": { "distance": 120, "angle_x": 44, "angle_y": -38 }
-    },
-    {
-      "id": "shinjuku_station",
-      "name": "新宿駅",
-      "category": "station",
-      "latitude": 35.6896,
-      "longitude": 139.7006,
-      "radius_m": 400,
-      "camera": { "distance": 155, "angle_x": 46, "angle_y": -42 }
-    },
-    {
-      "id": "shibuya_station",
-      "name": "渋谷駅",
-      "category": "station",
-      "latitude": 35.6580,
-      "longitude": 139.7016,
-      "radius_m": 400,
-      "camera": { "distance": 145, "angle_x": 44, "angle_y": -35 }
     },
     {
       "id": "sensoji",
@@ -55,31 +64,22 @@
       "camera": { "distance": 190, "angle_x": 50, "angle_y": -58 }
     },
     {
-      "id": "niigata_station",
-      "name": "新潟駅",
+      "id": "shinjuku_station",
+      "name": "新宿駅",
       "category": "station",
-      "latitude": 37.9120,
-      "longitude": 139.0619,
-      "radius_m": 350,
-      "camera": { "distance": 125, "angle_x": 43, "angle_y": -42 }
-    },
-    {
-      "id": "sapporo_station",
-      "name": "札幌駅",
-      "category": "station",
-      "latitude": 43.0687,
-      "longitude": 141.3508,
+      "latitude": 35.6896,
+      "longitude": 139.7006,
       "radius_m": 400,
-      "camera": { "distance": 150, "angle_x": 46, "angle_y": -40 }
+      "camera": { "distance": 155, "angle_x": 46, "angle_y": -42 }
     },
     {
-      "id": "sendai_station",
-      "name": "仙台駅",
+      "id": "shibuya_station",
+      "name": "渋谷駅",
       "category": "station",
-      "latitude": 38.2602,
-      "longitude": 140.8824,
-      "radius_m": 380,
-      "camera": { "distance": 140, "angle_x": 45, "angle_y": -43 }
+      "latitude": 35.6580,
+      "longitude": 139.7016,
+      "radius_m": 400,
+      "camera": { "distance": 145, "angle_x": 44, "angle_y": -35 }
     },
     {
       "id": "yokohama_station",
