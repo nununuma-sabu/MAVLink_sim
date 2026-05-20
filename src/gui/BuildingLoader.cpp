@@ -18,18 +18,24 @@ QVector2D parsePoint(const QJsonObject &obj)
 
 QVector<BuildingData> BuildingLoader::loadFromJson(const QString &path)
 {
-    QVector<BuildingData> buildings;
-
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
         qWarning() << "[BuildingLoader] 建物JSONを開けません:" << path << file.errorString();
-        return buildings;
+        return {};
     }
 
+    return loadFromJsonData(file.readAll(), path);
+}
+
+QVector<BuildingData> BuildingLoader::loadFromJsonData(const QByteArray &data,
+                                                       const QString &sourceName)
+{
+    QVector<BuildingData> buildings;
+
     QJsonParseError parseError;
-    const QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &parseError);
+    const QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
     if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
-        qWarning() << "[BuildingLoader] JSON解析失敗:" << path << parseError.errorString();
+        qWarning() << "[BuildingLoader] JSON解析失敗:" << sourceName << parseError.errorString();
         return buildings;
     }
 
@@ -64,6 +70,6 @@ QVector<BuildingData> BuildingLoader::loadFromJson(const QString &path)
         buildings.append(building);
     }
 
-    qDebug() << "[BuildingLoader] 建物読み込み:" << buildings.size() << "件";
+    qDebug() << "[BuildingLoader] 建物読み込み:" << buildings.size() << "件" << sourceName;
     return buildings;
 }

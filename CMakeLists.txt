@@ -46,6 +46,8 @@ set(GUI_SOURCES
     src/gui/TelemetryPanel.cpp
     src/gui/BuildingLoader.h
     src/gui/BuildingLoader.cpp
+    src/gui/BuildingProvider.h
+    src/gui/BuildingProvider.cpp
     src/gui/MapView.h
     src/gui/MapView.cpp
     src/gui/MapView3D.h

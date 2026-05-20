@@ -19,7 +19,21 @@ MapView3D::MapView3D(QWidget *parent)
     });
     m_animTimer.start(33); // ~30fps
 
-    m_buildings = BuildingLoader::loadFromJson(":/buildings/nerima_sample.json");
+    m_buildingProvider = new BuildingProvider(this);
+    connect(m_buildingProvider, &BuildingProvider::buildingsReady,
+            this, [this](const QVector<BuildingData> &buildings, const QString &source) {
+        m_buildings = buildings;
+        m_buildingStatus = QString("建物データ: %1 (%2件)").arg(source).arg(buildings.size());
+        qDebug() << "[MapView3D] 建物データ適用:" << buildings.size() << "件 source:" << source;
+        update();
+    });
+    connect(m_buildingProvider, &BuildingProvider::statusMessage,
+            this, [this](const QString &message) {
+        m_buildingStatus = message;
+        qDebug() << "[MapView3D]" << message;
+        update();
+    });
+    m_buildingProvider->loadForOrigin(m_homeLat, m_homeLon, 300);
 }
 
 QVector3D MapView3D::geoToLocal(double lat, double lon, double alt) const
@@ -535,9 +549,10 @@ void MapView3D::drawHUD()
     f.setBold(false);
     painter.setFont(f);
     painter.setPen(Qt::NoPen);
-    painter.setBrush(QColor(0, 0, 0, 100));
-    painter.drawRoundedRect(10, height() - 55, 200, 45, 4, 4);
+    painter.setBrush(QColor(0, 0, 0, 115));
+    painter.drawRoundedRect(10, height() - 72, 260, 62, 4, 4);
     painter.setPen(QColor(120, 120, 130));
+    painter.drawText(18, height() - 55, m_buildingStatus);
     painter.drawText(18, height() - 38, "左ドラッグ: 回転 | 右ドラッグ: パン");
     painter.drawText(18, height() - 22, "ホイール: ズーム");
 

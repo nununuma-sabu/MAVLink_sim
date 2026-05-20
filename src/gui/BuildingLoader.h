@@ -18,6 +18,8 @@ class BuildingLoader
 {
 public:
     static QVector<BuildingData> loadFromJson(const QString &path);
+    static QVector<BuildingData> loadFromJsonData(const QByteArray &data,
+                                                  const QString &sourceName = QString());
 };
 
 #endif // BUILDINGLOADER_H

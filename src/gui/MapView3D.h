@@ -10,7 +10,7 @@
 #include <QVector>
 #include <QTimer>
 #include "core/GeoUtils.h"
-#include "BuildingLoader.h"
+#include "BuildingProvider.h"
 
 struct MissionItem;
 
@@ -111,6 +111,8 @@ private:
 
     // 建物
     QVector<BuildingData> m_buildings;
+    BuildingProvider *m_buildingProvider = nullptr;
+    QString m_buildingStatus = "建物データ: 未読み込み";
 };
 
 #endif // MAPVIEW3D_H
