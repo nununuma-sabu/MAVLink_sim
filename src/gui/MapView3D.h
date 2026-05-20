@@ -67,8 +67,12 @@ private:
     void drawHUD();
     void drawWaypoints();
     void drawBuildings();
+    void drawGroundTexture();
     void drawGroundPaths();
     void drawPathBand(const GroundPathData &path);
+    void drawRoadMarkings(const GroundPathData &path, float halfWidth);
+    void drawCrosswalk(const QVector3D &center, const QVector3D &dir,
+                       const QVector3D &normal, float halfWidth);
     void drawRailwayDetails(const GroundPathData &path);
     void drawRoof(const BuildingData &building);
     void drawBuildingDetails(const BuildingData &building);

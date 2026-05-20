@@ -299,6 +299,8 @@ void MapView3D::drawGrid()
     float gridSize = 420.0f;
     float step = 10.0f;
 
+    drawGroundTexture();
+
     // メイングリッド
     glLineWidth(1.0f);
     glBegin(GL_LINES);
@@ -320,13 +322,66 @@ void MapView3D::drawGrid()
     }
     glEnd();
 
-    // グラウンドプレーン（半透明）
+}
+
+void MapView3D::drawGroundTexture()
+{
+    const float gridSize = 420.0f;
+
+    // グラウンドプレーン
     glBegin(GL_QUADS);
-    glColor4f(0.055f, 0.095f, 0.070f, 0.88f);
+    glColor4f(0.045f, 0.078f, 0.058f, 0.96f);
     glVertex3f(-gridSize, -0.01f, -gridSize);
     glVertex3f( gridSize, -0.01f, -gridSize);
     glVertex3f( gridSize, -0.01f,  gridSize);
     glVertex3f(-gridSize, -0.01f,  gridSize);
+    glEnd();
+
+    // 舗装・緑地・敷地のわずかな色むら。固定パターンなので毎フレーム安定する。
+    const float cell = 28.0f;
+    glBegin(GL_QUADS);
+    for (float x = -gridSize; x < gridSize; x += cell) {
+        for (float z = -gridSize; z < gridSize; z += cell) {
+            const int ix = static_cast<int>((x + gridSize) / cell);
+            const int iz = static_cast<int>((z + gridSize) / cell);
+            const int pattern = qAbs((ix * 37 + iz * 17 + ix * iz * 3) % 11);
+
+            QColor tone;
+            float alpha = 0.22f;
+            if (pattern == 0 || pattern == 7) {
+                tone = QColor("#263226"); // 濃い緑地
+                alpha = 0.30f;
+            } else if (pattern == 1 || pattern == 8) {
+                tone = QColor("#394036"); // 敷地のくすみ
+                alpha = 0.22f;
+            } else if (pattern == 2) {
+                tone = QColor("#4a4941"); // 舗装面
+                alpha = 0.18f;
+            } else {
+                tone = QColor("#1f2c23");
+                alpha = 0.16f;
+            }
+
+            const float inset = 0.9f + static_cast<float>(pattern % 3) * 0.35f;
+            glColor4f(tone.redF(), tone.greenF(), tone.blueF(), alpha);
+            glVertex3f(x + inset, 0.0f, z + inset);
+            glVertex3f(x + cell - inset, 0.0f, z + inset);
+            glVertex3f(x + cell - inset, 0.0f, z + cell - inset);
+            glVertex3f(x + inset, 0.0f, z + cell - inset);
+        }
+    }
+    glEnd();
+
+    // 区画境界のような薄いライン
+    glLineWidth(0.8f);
+    glBegin(GL_LINES);
+    glColor4f(0.55f, 0.58f, 0.49f, 0.10f);
+    for (float i = -gridSize; i <= gridSize; i += 28.0f) {
+        glVertex3f(i, 0.006f, -gridSize);
+        glVertex3f(i, 0.006f, gridSize);
+        glVertex3f(-gridSize, 0.006f, i);
+        glVertex3f(gridSize, 0.006f, i);
+    }
     glEnd();
 }
 
@@ -392,19 +447,93 @@ void MapView3D::drawPathBand(const GroundPathData &path)
         glEnd();
     }
 
-    if (path.width >= 5.0f) {
-        glEnable(GL_LINE_STIPPLE);
-        glLineStipple(1, 0x00FF);
-        glLineWidth(1.4f);
-        glBegin(GL_LINE_STRIP);
-        glColor4f(0.88f, 0.84f, 0.62f, 0.55f);
-        for (const QVector2D &point : path.points) {
-            const QVector3D p = pathPointToLocal(point, 0.055f);
-            glVertex3f(p.x(), p.y(), p.z());
-        }
-        glEnd();
-        glDisable(GL_LINE_STIPPLE);
+    drawRoadMarkings(path, halfWidth);
+}
+
+void MapView3D::drawRoadMarkings(const GroundPathData &path, float halfWidth)
+{
+    if (path.width < 3.5f || path.type == "footway" || path.type == "path") {
+        return;
     }
+
+    for (int i = 0; i < path.points.size() - 1; i++) {
+        const QVector3D a = pathPointToLocal(path.points[i], 0.065f);
+        const QVector3D b = pathPointToLocal(path.points[i + 1], 0.065f);
+        QVector3D dir = b - a;
+        dir.setY(0.0f);
+        const float len = dir.length();
+        if (len < 0.01f) continue;
+        dir /= len;
+
+        const QVector3D normal(-dir.z(), 0.0f, dir.x());
+        const float edgeOffset = qMax(halfWidth - 0.42f, 0.6f);
+
+        glLineWidth(1.2f);
+        glBegin(GL_LINES);
+        glColor4f(0.88f, 0.86f, 0.74f, 0.34f);
+        const QVector3D aL = a + normal * edgeOffset;
+        const QVector3D bL = b + normal * edgeOffset;
+        const QVector3D aR = a - normal * edgeOffset;
+        const QVector3D bR = b - normal * edgeOffset;
+        glVertex3f(aL.x(), aL.y(), aL.z());
+        glVertex3f(bL.x(), bL.y(), bL.z());
+        glVertex3f(aR.x(), aR.y(), aR.z());
+        glVertex3f(bR.x(), bR.y(), bR.z());
+        glEnd();
+
+        if (path.width >= 5.0f) {
+            const float dashLength = qBound(2.6f, len * 0.08f, 5.0f);
+            const float dashGap = dashLength * 1.25f;
+            const float halfDashWidth = 0.12f;
+
+            glBegin(GL_QUADS);
+            glColor4f(0.94f, 0.90f, 0.66f, 0.58f);
+            for (float t = dashGap * 0.5f; t < len - dashLength * 0.5f; t += dashLength + dashGap) {
+                const QVector3D c0 = a + dir * t;
+                const QVector3D c1 = a + dir * qMin(t + dashLength, len);
+                const QVector3D l0 = c0 + normal * halfDashWidth;
+                const QVector3D r0 = c0 - normal * halfDashWidth;
+                const QVector3D r1 = c1 - normal * halfDashWidth;
+                const QVector3D l1 = c1 + normal * halfDashWidth;
+                glVertex3f(l0.x(), l0.y(), l0.z());
+                glVertex3f(r0.x(), r0.y(), r0.z());
+                glVertex3f(r1.x(), r1.y(), r1.z());
+                glVertex3f(l1.x(), l1.y(), l1.z());
+            }
+            glEnd();
+        }
+
+        if (path.width >= 4.0f && (i == 0 || i == path.points.size() - 2 || len > 48.0f)) {
+            const QVector3D crossCenter = a + dir * qBound(5.0f, len * 0.20f, 12.0f);
+            drawCrosswalk(crossCenter, dir, normal, halfWidth);
+        }
+    }
+}
+
+void MapView3D::drawCrosswalk(const QVector3D &center, const QVector3D &dir,
+                              const QVector3D &normal, float halfWidth)
+{
+    const int stripeCount = qBound(4, static_cast<int>(halfWidth * 0.9f), 8);
+    const float stripeLength = qMin(halfWidth * 1.72f, 9.0f);
+    const float stripeWidth = 0.46f;
+    const float gap = 0.52f;
+    const float totalWidth = stripeCount * stripeWidth + (stripeCount - 1) * gap;
+    const QVector3D start = center - dir * (totalWidth * 0.5f);
+
+    glBegin(GL_QUADS);
+    glColor4f(0.90f, 0.90f, 0.82f, 0.54f);
+    for (int i = 0; i < stripeCount; i++) {
+        const QVector3D c = start + dir * (i * (stripeWidth + gap) + stripeWidth * 0.5f);
+        const QVector3D p0 = c - normal * (stripeLength * 0.5f) - dir * (stripeWidth * 0.5f);
+        const QVector3D p1 = c + normal * (stripeLength * 0.5f) - dir * (stripeWidth * 0.5f);
+        const QVector3D p2 = c + normal * (stripeLength * 0.5f) + dir * (stripeWidth * 0.5f);
+        const QVector3D p3 = c - normal * (stripeLength * 0.5f) + dir * (stripeWidth * 0.5f);
+        glVertex3f(p0.x(), p0.y() + 0.012f, p0.z());
+        glVertex3f(p1.x(), p1.y() + 0.012f, p1.z());
+        glVertex3f(p2.x(), p2.y() + 0.012f, p2.z());
+        glVertex3f(p3.x(), p3.y() + 0.012f, p3.z());
+    }
+    glEnd();
 }
 
 void MapView3D::drawRailwayDetails(const GroundPathData &path)
