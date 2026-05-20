@@ -6,6 +6,8 @@
 #include <QSlider>
 #include <QComboBox>
 #include <QLabel>
+#include <QVector>
+#include "core/MapLocation.h"
 
 /**
  * @brief 操作パネル
@@ -19,8 +21,10 @@ class ControlPanel : public QWidget
 
 public:
     explicit ControlPanel(QWidget *parent = nullptr);
+    void setMapLocations(const QVector<MapLocation> &locations, int currentIndex = 0);
 
 signals:
+    void mapLocationChangeRequested(int locationIndex);
     void armRequested();
     void disarmRequested();
     void takeoffRequested(double altitude);
@@ -50,6 +54,7 @@ private:
     QSlider *m_sliderYaw;
     QLabel *m_lblTakeoffAlt;
     QSlider *m_sliderTakeoffAlt;
+    QComboBox *m_cmbMapLocation;
 };
 
 #endif // CONTROLPANEL_H

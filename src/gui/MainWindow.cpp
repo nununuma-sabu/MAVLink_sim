@@ -8,6 +8,7 @@
 #include "gui/panels/MissionPanel.h"
 #include "core/DroneSimulator.h"
 #include "core/FlightController.h"
+#include "core/MapLocationLoader.h"
 #include "core/MissionManager.h"
 #include "mavlink/MavlinkUdpLink.h"
 #include "mavlink/MavlinkManager.h"
@@ -35,6 +36,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_udpLink = new MavlinkUdpLink(this);
     m_mavManager = new MavlinkManager(m_udpLink, this);
     m_msgHandler = new MessageHandler(m_mavManager, m_flightController, m_missionManager, this);
+    m_locations = MapLocationLoader::loadFromJson(":/map_locations.json");
 
     setupStyle();
     setupUi();
@@ -152,12 +154,10 @@ void MainWindow::setupUi()
 
     auto *actReset = toolbar->addAction("リセット");
     connect(actReset, &QAction::triggered, [this]() {
-        m_simulator->stop();
-        m_simulator->state() = DroneState();
-        m_mapView->clearTrace();
-        m_mapView3D->clearTrace();
-        m_simulator->start();
-        m_logPanel->appendLog("シミュレーションリセット");
+        if (m_currentLocationIndex >= 0 && m_currentLocationIndex < m_locations.size()) {
+            resetSimulationToLocation(m_locations[m_currentLocationIndex]);
+            m_logPanel->appendLog("シミュレーションリセット");
+        }
     });
 
     // メインレイアウト
@@ -198,6 +198,7 @@ void MainWindow::setupUi()
 
     // 右パネル（操作 / ミッション タブ）
     m_controlPanel = new ControlPanel();
+    m_controlPanel->setMapLocations(m_locations, m_currentLocationIndex);
     m_missionPanel = new MissionPanel(m_missionManager);
 
     auto *rightTabs = new QTabWidget();
@@ -298,6 +299,8 @@ void MainWindow::setupConnections()
             this, &MainWindow::onRtlRequested);
     connect(m_controlPanel, &ControlPanel::modeChangeRequested,
             this, &MainWindow::onModeChanged);
+    connect(m_controlPanel, &ControlPanel::mapLocationChangeRequested,
+            this, &MainWindow::onMapLocationChangeRequested);
     connect(m_controlPanel, &ControlPanel::manualInputChanged,
             m_simulator, &DroneSimulator::setManualInput);
 
@@ -332,6 +335,19 @@ void MainWindow::setupConnections()
         m_logPanel->appendLog(QString("マップクリック WP追加: %1, %2")
                               .arg(lat, 0, 'f', 5).arg(lon, 0, 'f', 5));
     });
+}
+
+void MainWindow::resetSimulationToLocation(const MapLocation &location)
+{
+    m_missionManager->clearAll();
+    m_mapView->setHome(location.latitude, location.longitude);
+    m_mapView->clearTrace();
+    m_mapView->clearWaypoints();
+    m_mapView3D->setHome(location.latitude, location.longitude, location.radiusMeters,
+                         location.name, location.cameraDistance,
+                         location.cameraAngleX, location.cameraAngleY);
+    m_mapView3D->clearTrace();
+    m_simulator->resetToHome(location.latitude, location.longitude, 50.0);
 }
 
 void MainWindow::onStateUpdated(const DroneState &state)
@@ -404,4 +420,29 @@ void MainWindow::onModeChanged(int modeIndex)
         m_flightController->setFlightMode(mode);
         m_logPanel->appendLog(QString("→ モード変更: %1").arg(combo->itemText(modeIndex)));
     }
+}
+
+void MainWindow::onMapLocationChangeRequested(int locationIndex)
+{
+    if (locationIndex < 0 || locationIndex >= m_locations.size()) {
+        return;
+    }
+
+    if (m_simulator->state().armed) {
+        statusBar()->showMessage("マップ地点の変更は DISARM 中のみ可能です", 3000);
+        m_controlPanel->setMapLocations(m_locations, m_currentLocationIndex);
+        return;
+    }
+
+    m_currentLocationIndex = locationIndex;
+    const MapLocation &location = m_locations[m_currentLocationIndex];
+    resetSimulationToLocation(location);
+
+    const QString message = QString("マップ地点変更: %1 (%2, %3 / 半径%4m)")
+        .arg(location.name)
+        .arg(location.latitude, 0, 'f', 4)
+        .arg(location.longitude, 0, 'f', 4)
+        .arg(location.radiusMeters);
+    m_logPanel->appendLog(message);
+    statusBar()->showMessage(message, 4000);
 }

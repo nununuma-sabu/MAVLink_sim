@@ -1,0 +1,130 @@
+{
+  "locations": [
+    {
+      "id": "nerima_station",
+      "name": "練馬駅",
+      "category": "station",
+      "latitude": 35.7378,
+      "longitude": 139.6542,
+      "radius_m": 300,
+      "camera": { "distance": 95, "angle_x": 42, "angle_y": -45 }
+    },
+    {
+      "id": "ikebukuro_station",
+      "name": "池袋駅",
+      "category": "station",
+      "latitude": 35.7289,
+      "longitude": 139.7104,
+      "radius_m": 350,
+      "camera": { "distance": 120, "angle_x": 44, "angle_y": -38 }
+    },
+    {
+      "id": "shinjuku_station",
+      "name": "新宿駅",
+      "category": "station",
+      "latitude": 35.6896,
+      "longitude": 139.7006,
+      "radius_m": 400,
+      "camera": { "distance": 155, "angle_x": 46, "angle_y": -42 }
+    },
+    {
+      "id": "shibuya_station",
+      "name": "渋谷駅",
+      "category": "station",
+      "latitude": 35.6580,
+      "longitude": 139.7016,
+      "radius_m": 400,
+      "camera": { "distance": 145, "angle_x": 44, "angle_y": -35 }
+    },
+    {
+      "id": "sensoji",
+      "name": "浅草寺",
+      "category": "landmark",
+      "latitude": 35.7148,
+      "longitude": 139.7967,
+      "radius_m": 350,
+      "camera": { "distance": 105, "angle_x": 36, "angle_y": -50 }
+    },
+    {
+      "id": "tokyo_skytree",
+      "name": "東京スカイツリー",
+      "category": "landmark",
+      "latitude": 35.7101,
+      "longitude": 139.8107,
+      "radius_m": 400,
+      "camera": { "distance": 190, "angle_x": 50, "angle_y": -58 }
+    },
+    {
+      "id": "niigata_station",
+      "name": "新潟駅",
+      "category": "station",
+      "latitude": 37.9120,
+      "longitude": 139.0619,
+      "radius_m": 350,
+      "camera": { "distance": 125, "angle_x": 43, "angle_y": -42 }
+    },
+    {
+      "id": "sapporo_station",
+      "name": "札幌駅",
+      "category": "station",
+      "latitude": 43.0687,
+      "longitude": 141.3508,
+      "radius_m": 400,
+      "camera": { "distance": 150, "angle_x": 46, "angle_y": -40 }
+    },
+    {
+      "id": "sendai_station",
+      "name": "仙台駅",
+      "category": "station",
+      "latitude": 38.2602,
+      "longitude": 140.8824,
+      "radius_m": 380,
+      "camera": { "distance": 140, "angle_x": 45, "angle_y": -43 }
+    },
+    {
+      "id": "yokohama_station",
+      "name": "横浜駅",
+      "category": "station",
+      "latitude": 35.4658,
+      "longitude": 139.6223,
+      "radius_m": 400,
+      "camera": { "distance": 155, "angle_x": 46, "angle_y": -38 }
+    },
+    {
+      "id": "nagoya_station",
+      "name": "名古屋駅",
+      "category": "station",
+      "latitude": 35.1709,
+      "longitude": 136.8815,
+      "radius_m": 400,
+      "camera": { "distance": 160, "angle_x": 47, "angle_y": -42 }
+    },
+    {
+      "id": "osaka_station",
+      "name": "大阪駅",
+      "category": "station",
+      "latitude": 34.7025,
+      "longitude": 135.4959,
+      "radius_m": 400,
+      "camera": { "distance": 165, "angle_x": 47, "angle_y": -40 }
+    },
+    {
+      "id": "hiroshima_station",
+      "name": "広島駅",
+      "category": "station",
+      "latitude": 34.3973,
+      "longitude": 132.4756,
+      "radius_m": 360,
+      "camera": { "distance": 135, "angle_x": 44, "angle_y": -44 }
+    },
+    {
+      "id": "hakata_station",
+      "name": "博多駅",
+      "category": "station",
+      "latitude": 33.5902,
+      "longitude": 130.4206,
+      "radius_m": 380,
+      "camera": { "distance": 145, "angle_x": 45, "angle_y": -41 }
+    }
+  ]
+}

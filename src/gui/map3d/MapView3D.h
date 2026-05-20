@@ -33,7 +33,11 @@ public:
                      double roll, double pitch, double yaw);
 
     /// ホームポジション設定
-    void setHome(double latitude, double longitude);
+    void setHome(double latitude, double longitude, int radiusMeters = 300,
+                 const QString &locationName = QString(),
+                 float cameraDistance = 95.0f,
+                 float cameraAngleX = 42.0f,
+                 float cameraAngleY = -45.0f);
 
     /// 飛行経路をクリア
     void clearTrace();
@@ -128,6 +132,7 @@ private:
     QVector<BuildingData> m_buildings;
     QVector<GroundPathData> m_groundPaths;
     BuildingProvider *m_buildingProvider = nullptr;
+    QString m_locationName = "練馬駅";
     QString m_buildingStatus = "建物データ: 未読み込み";
 };
 

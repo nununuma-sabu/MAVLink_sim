@@ -21,6 +21,23 @@ void ControlPanel::setupUi()
         "margin-top: 8px; padding-top: 12px; font-weight: bold; }"
         "QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 4px; }";
 
+    // === マップ地点 ===
+    auto *locationGroup = new QGroupBox("マップ地点");
+    locationGroup->setStyleSheet(groupStyle);
+    auto *locationLayout = new QVBoxLayout(locationGroup);
+
+    m_cmbMapLocation = new QComboBox();
+    m_cmbMapLocation->setStyleSheet(
+        "QComboBox { background: #333; color: #ccc; border: 1px solid #555; "
+        "border-radius: 3px; padding: 4px 8px; }"
+        "QComboBox::drop-down { border: none; }"
+        "QComboBox QAbstractItemView { background: #333; color: #ccc; selection-background-color: #3498db; }");
+    connect(m_cmbMapLocation, QOverload<int>::of(&QComboBox::activated),
+            this, &ControlPanel::mapLocationChangeRequested);
+
+    locationLayout->addWidget(m_cmbMapLocation);
+    mainLayout->addWidget(locationGroup);
+
     // === Arm / Disarm ===
     auto *armGroup = new QGroupBox("アーム制御");
     armGroup->setStyleSheet(groupStyle);
@@ -139,6 +156,23 @@ void ControlPanel::setupUi()
             label->setStyleSheet("color: #999; font-size: 11px;");
         }
     }
+}
+
+void ControlPanel::setMapLocations(const QVector<MapLocation> &locations, int currentIndex)
+{
+    m_cmbMapLocation->blockSignals(true);
+    m_cmbMapLocation->clear();
+
+    for (int i = 0; i < locations.size(); i++) {
+        const MapLocation &location = locations[i];
+        const QString suffix = location.category == "landmark" ? " / 観光" : " / 駅";
+        m_cmbMapLocation->addItem(location.name + suffix, i);
+    }
+
+    if (!locations.isEmpty()) {
+        m_cmbMapLocation->setCurrentIndex(qBound(0, currentIndex, locations.size() - 1));
+    }
+    m_cmbMapLocation->blockSignals(false);
 }
 
 QString ControlPanel::buttonStyle(const QString &baseColor, const QString &hoverColor) const

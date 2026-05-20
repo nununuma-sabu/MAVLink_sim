@@ -40,7 +40,7 @@ MapView3D::MapView3D(QWidget *parent)
         qDebug() << "[MapView3D]" << message;
         update();
     });
-    m_buildingProvider->loadForOrigin(m_homeLat, m_homeLon, 300);
+    setHome(m_homeLat, m_homeLon, 300, m_locationName);
 }
 
 QVector3D MapView3D::geoToLocal(double lat, double lon, double alt) const
@@ -131,11 +131,31 @@ float MapView3D::lightForWall(const QVector3D &a, const QVector3D &b, int wallIn
     return qBound(0.45f, 0.58f + direct * 0.42f + variation, 1.08f);
 }
 
-void MapView3D::setHome(double latitude, double longitude)
+void MapView3D::setHome(double latitude, double longitude, int radiusMeters,
+                        const QString &locationName,
+                        float cameraDistance,
+                        float cameraAngleX,
+                        float cameraAngleY)
 {
     m_homeLat = latitude;
     m_homeLon = longitude;
     m_homeSet = true;
+    if (!locationName.isEmpty()) {
+        m_locationName = locationName;
+    }
+    m_dronePos = QVector3D(0.0f, m_dronePos.y(), 0.0f);
+    m_cameraDistance = cameraDistance;
+    m_cameraAngleX = cameraAngleX;
+    m_cameraAngleY = cameraAngleY;
+    m_cameraTarget = QVector3D(0.0f, qMin(m_dronePos.y(), 24.0f), 0.0f);
+    m_tracePath.clear();
+    m_waypoints.clear();
+    m_activeWpIndex = -1;
+    m_buildings.clear();
+    m_groundPaths.clear();
+    m_buildingStatus = "建物データ: OSM取得中";
+    m_buildingProvider->loadForOrigin(m_homeLat, m_homeLon, radiusMeters);
+    update();
 }
 
 void MapView3D::updateDrone(double latitude, double longitude, double altitude,
@@ -1047,32 +1067,34 @@ void MapView3D::drawHUD()
     painter.drawLine(compassX, compassY - compassR + 8, compassX - 5, compassY - compassR + 16);
     painter.drawLine(compassX, compassY - compassR + 8, compassX + 5, compassY - compassR + 16);
 
-    // 高度表示（左上）
+    // 地点・高度表示（左上）
     f.setPixelSize(14);
     painter.setFont(f);
 
     painter.setPen(Qt::NoPen);
     painter.setBrush(QColor(0, 0, 0, 120));
-    painter.drawRoundedRect(10, 10, 150, 60, 6, 6);
+    painter.drawRoundedRect(10, 10, 190, 82, 6, 6);
 
     painter.setPen(QColor(150, 150, 150));
     f.setPixelSize(10);
     painter.setFont(f);
-    painter.drawText(18, 28, "ALT");
-    painter.drawText(18, 52, "SPD");
+    painter.drawText(18, 28, "LOC");
+    painter.drawText(18, 52, "ALT");
+    painter.drawText(18, 76, "SPD");
 
     f.setPixelSize(16);
     f.setBold(true);
     painter.setFont(f);
     painter.setPen(QColor(0, 255, 100));
-    painter.drawText(50, 30, QString::number(static_cast<double>(m_dronePos.y()), 'f', 1) + " m");
+    painter.drawText(50, 30, m_locationName);
+    painter.drawText(50, 54, QString::number(static_cast<double>(m_dronePos.y()), 'f', 1) + " m");
 
     float spd = 0;
     if (m_tracePath.size() >= 2) {
         QVector3D diff = m_tracePath.last() - m_tracePath[m_tracePath.size() - 2];
         spd = diff.length() * 30.0f; // 30fps * distance
     }
-    painter.drawText(50, 54, QString::number(static_cast<double>(spd), 'f', 1) + " m/s");
+    painter.drawText(50, 78, QString::number(static_cast<double>(spd), 'f', 1) + " m/s");
 
     // 操作ヘルプ（左下）
     f.setPixelSize(10);

@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/">
         <file>buildings/nerima_sample.json</file>
+        <file>map_locations.json</file>
     </qresource>
 </RCC>

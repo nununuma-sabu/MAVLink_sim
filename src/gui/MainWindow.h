@@ -4,6 +4,8 @@
 #include <QMainWindow>
 #include <QLabel>
 #include <QTimer>
+#include <QVector>
+#include "core/MapLocation.h"
 
 class DroneSimulator;
 class FlightController;
@@ -42,11 +44,13 @@ private slots:
     void onLandRequested();
     void onRtlRequested();
     void onModeChanged(int modeIndex);
+    void onMapLocationChangeRequested(int locationIndex);
 
 private:
     void setupUi();
     void setupConnections();
     void setupStyle();
+    void resetSimulationToLocation(const MapLocation &location);
 
     // Core
     DroneSimulator  *m_simulator;
@@ -63,6 +67,8 @@ private:
     MapView           *m_mapView;
     MapView3D         *m_mapView3D;
     ControlPanel      *m_controlPanel;
+    QVector<MapLocation> m_locations;
+    int m_currentLocationIndex = 0;
 
     // Mission
     MissionManager    *m_missionManager;

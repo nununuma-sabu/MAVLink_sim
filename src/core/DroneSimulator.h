@@ -25,6 +25,8 @@ public:
     void start();
     /// シミュレーション停止
     void stop();
+    /// ホーム位置を指定して初期状態に戻す
+    void resetToHome(double latitude, double longitude, double altitude = 50.0);
 
     /// 現在の状態を取得
     const DroneState& state() const { return m_state; }

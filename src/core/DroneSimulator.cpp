@@ -30,6 +30,43 @@ void DroneSimulator::stop()
     qDebug() << "[DroneSimulator] シミュレーション停止";
 }
 
+void DroneSimulator::resetToHome(double latitude, double longitude, double altitude)
+{
+    const bool wasRunning = m_simTimer.isActive();
+    if (wasRunning) {
+        stop();
+    }
+
+    m_state = DroneState();
+    m_state.latitude = latitude;
+    m_state.longitude = longitude;
+    m_state.altitude = qMax(0.0, altitude);
+    m_state.altitude_msl = m_state.altitude + 50.0;
+    m_state.target_latitude = 0.0;
+    m_state.target_longitude = 0.0;
+    m_state.target_altitude = 0.0;
+    m_state.has_target = false;
+
+    m_homeLat = latitude;
+    m_homeLon = longitude;
+    m_homeAlt = m_state.altitude;
+    m_inputRoll = 0.0;
+    m_inputPitch = 0.0;
+    m_inputYaw = 0.0;
+    m_inputThrottle = 0.0;
+    m_isTakingOff = false;
+    m_isLanding = false;
+
+    m_elapsedTimer.restart();
+    emit stateUpdated(m_state);
+
+    if (wasRunning) {
+        start();
+    }
+
+    qDebug() << "[DroneSimulator] ホーム位置リセット:" << latitude << longitude << altitude;
+}
+
 // ============================================================
 // コマンド
 // ============================================================

@@ -162,12 +162,6 @@ void BuildingProvider::loadForOrigin(double latitude, double longitude, int radi
     }
 
     emit statusMessage("建物データ: OSM取得中");
-    const QVector<BuildingData> preview = fallbackBuildings();
-    const QVector<GroundPathData> previewPaths = fallbackPaths();
-    if (!preview.isEmpty()) {
-        emit pathsReady(previewPaths, "sample-preview");
-        emit buildingsReady(preview, "sample-preview");
-    }
 
     QNetworkRequest request(QUrl("https://overpass-api.de/api/interpreter"));
     request.setHeader(QNetworkRequest::ContentTypeHeader,
