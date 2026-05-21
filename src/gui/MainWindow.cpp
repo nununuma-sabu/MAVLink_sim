@@ -6,6 +6,7 @@
 #include "gui/panels/ControlPanel.h"
 #include "gui/panels/LogPanel.h"
 #include "gui/panels/MissionPanel.h"
+#include "core/AppSettings.h"
 #include "core/DroneSimulator.h"
 #include "core/FlightController.h"
 #include "core/MapLocationLoader.h"
@@ -36,18 +37,15 @@ MainWindow::MainWindow(QWidget *parent)
     m_udpLink = new MavlinkUdpLink(this);
     m_mavManager = new MavlinkManager(m_udpLink, this);
     m_msgHandler = new MessageHandler(m_mavManager, m_flightController, m_missionManager, this);
+    m_mavlinkSettings = AppSettings::loadMavlinkSettings();
     m_locations = MapLocationLoader::loadFromJson(":/map_locations.json");
 
     setupStyle();
     setupUi();
     setupConnections();
 
-    // UDP通信開始 (ローカル: 14540, 送信先: 14550)
-    // QGCは14550でリッスンするので、シミュレータは14540でリッスン
-    if (m_udpLink->start(14540, QHostAddress::LocalHost, 14550)) {
-        qDebug() << "[MainWindow] UDP通信開始 ローカル:14540 → GCS:14550";
-        m_logPanel->appendLog("UDP通信開始 ローカル:14540 → GCS:14550");
-    }
+    // UDP通信開始
+    startMavlinkConnection();
 
     // シミュレーション＆テレメトリ開始
     m_simulator->start();
@@ -143,11 +141,8 @@ void MainWindow::setupUi()
     actConnect->setToolTip("UDP接続の再接続");
     connect(actConnect, &QAction::triggered, [this]() {
         m_udpLink->stop();
-        if (m_udpLink->start(14540, QHostAddress::LocalHost, 14550)) {
-            m_lblConnection->setText("● 接続中");
-            m_lblConnection->setStyleSheet("color: #2ecc71;");
-            m_logPanel->appendLog("UDP再接続 ローカル:14540 → GCS:14550");
-        }
+        m_mavlinkSettings = AppSettings::loadMavlinkSettings();
+        startMavlinkConnection();
     });
 
     toolbar->addSeparator();
@@ -335,6 +330,40 @@ void MainWindow::setupConnections()
         m_logPanel->appendLog(QString("マップクリック WP追加: %1, %2")
                               .arg(lat, 0, 'f', 5).arg(lon, 0, 'f', 5));
     });
+}
+
+bool MainWindow::startMavlinkConnection()
+{
+    QHostAddress remoteHost(m_mavlinkSettings.remoteHost);
+    if (remoteHost.isNull()) {
+        remoteHost = QHostAddress::LocalHost;
+        m_logPanel->appendLog(QString("MAVLink設定: remote_host が不正なため localhost を使用: %1")
+                              .arg(m_mavlinkSettings.remoteHost));
+    }
+
+    const bool started = m_udpLink->start(m_mavlinkSettings.localPort,
+                                          remoteHost,
+                                          m_mavlinkSettings.remotePort);
+    if (started) {
+        m_lblConnection->setText("● 接続中");
+        m_lblConnection->setStyleSheet("color: #2ecc71;");
+        const QString message = QString("UDP通信開始 ローカル:%1 → %2:%3")
+            .arg(m_mavlinkSettings.localPort)
+            .arg(remoteHost.toString())
+            .arg(m_mavlinkSettings.remotePort);
+        qDebug() << "[MainWindow]" << message
+                 << "設定:" << m_mavlinkSettings.sourcePath;
+        m_logPanel->appendLog(message);
+        m_logPanel->appendLog(QString("設定ファイル: %1").arg(m_mavlinkSettings.sourcePath));
+    } else {
+        m_lblConnection->setText("● 接続失敗");
+        m_lblConnection->setStyleSheet("color: #e74c3c;");
+        m_logPanel->appendLog(QString("UDP通信開始失敗 ローカル:%1 → %2:%3")
+                              .arg(m_mavlinkSettings.localPort)
+                              .arg(remoteHost.toString())
+                              .arg(m_mavlinkSettings.remotePort));
+    }
+    return started;
 }
 
 void MainWindow::resetSimulationToLocation(const MapLocation &location)

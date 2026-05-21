@@ -20,6 +20,8 @@ add_definitions(-DMAVLINK_USE_MESSAGE_INFO)
 set(CORE_SOURCES
     src/core/DroneState.h
     src/core/GeoUtils.h
+    src/core/AppSettings.h
+    src/core/AppSettings.cpp
     src/core/MapLocation.h
     src/core/MapLocationLoader.h
     src/core/MapLocationLoader.cpp

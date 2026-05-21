@@ -1,0 +1,4 @@
+[mavlink]
+local_port=14540
+remote_host=127.0.0.1
+remote_port=14550

@@ -25,12 +25,12 @@ public:
     ~MavlinkUdpLink() override;
 
     /// UDP接続を開始
-    /// @param localPort 受信ポート (デフォルト: 14540)
+    /// @param localPort 受信ポート
     /// @param remoteHost GCSのアドレス
-    /// @param remotePort GCSのポート (デフォルト: 14550)
-    bool start(uint16_t localPort = 14540,
-               const QHostAddress &remoteHost = QHostAddress::LocalHost,
-               uint16_t remotePort = 14550);
+    /// @param remotePort GCSのポート
+    bool start(uint16_t localPort,
+               const QHostAddress &remoteHost,
+               uint16_t remotePort);
 
     /// 接続を停止
     void stop();
@@ -56,7 +56,7 @@ private slots:
 private:
     QUdpSocket *m_socket = nullptr;
     QHostAddress m_remoteHost;
-    uint16_t m_remotePort = 14550;
+    uint16_t m_remotePort = 0;
     bool m_connected = false;
     bool m_hasRemote = false;
 

@@ -165,12 +165,26 @@ make -j$(nproc)
 
 ## QGroundControl との接続
 
-1. このシミュレーターを起動（ポート `14550` で MAVLink を送信）
+1. このシミュレーターを起動（初期設定ではポート `14550` へ MAVLink を送信）
 2. QGroundControl を起動
 3. 自動的に Vehicle として認識される
 4. QGC 側から Arm / Takeoff / コマンド送信が可能
 
-**通信ポート**: UDP `14550` (localhost)
+初期通信設定:
+
+- ローカル受信ポート: UDP `14540`
+- GCS送信先: `127.0.0.1:14550`
+
+通信設定は `mavlink_sim.ini` で変更できます。起動ディレクトリに `mavlink_sim.ini` がある場合はそれを優先し、ない場合はOS標準の設定ディレクトリに初期設定を自動生成します。
+
+```ini
+[mavlink]
+local_port=14540
+remote_host=127.0.0.1
+remote_port=14550
+```
+
+設定例は `mavlink_sim.ini.example` に同梱しています。複数インスタンスを起動する場合は、少なくとも `local_port` をインスタンスごとに変えてください。
 
 ---
 

@@ -5,6 +5,7 @@
 #include <QLabel>
 #include <QTimer>
 #include <QVector>
+#include "core/AppSettings.h"
 #include "core/MapLocation.h"
 
 class DroneSimulator;
@@ -50,6 +51,7 @@ private:
     void setupUi();
     void setupConnections();
     void setupStyle();
+    bool startMavlinkConnection();
     void resetSimulationToLocation(const MapLocation &location);
 
     // Core
@@ -60,6 +62,7 @@ private:
     MavlinkUdpLink  *m_udpLink;
     MavlinkManager  *m_mavManager;
     MessageHandler  *m_msgHandler;
+    MavlinkConnectionSettings m_mavlinkSettings;
 
     // GUI
     AttitudeIndicator *m_attitudeIndicator;
