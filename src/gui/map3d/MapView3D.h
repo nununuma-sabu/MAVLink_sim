@@ -3,6 +3,7 @@
 
 #include <QOpenGLWidget>
 #include <QOpenGLFunctions>
+#include <QOpenGLShaderProgram>
 #include <QVector3D>
 #include <QMatrix4x4>
 #include <QMouseEvent>
@@ -81,6 +82,9 @@ private:
     void rebuildStaticCityMesh();
     void uploadStaticCityMeshToGpu();
     void clearStaticCityVbos();
+    bool initializeStaticCityShader();
+    QMatrix4x4 projectionMatrix() const;
+    QMatrix4x4 viewMatrix() const;
 
     struct StaticVboBatch {
         Map3DPrimitive primitive = Map3DPrimitive::Triangles;
@@ -133,6 +137,14 @@ private:
     QVector<GroundPathData> m_groundPaths;
     Map3DStaticMesh m_staticCityMesh;
     QVector<StaticVboBatch> m_staticCityVboBatches;
+    QOpenGLShaderProgram *m_staticCityProgram = nullptr;
+    int m_staticCityMvpLocation = -1;
+    int m_staticCityModelViewLocation = -1;
+    int m_staticCityFogColorLocation = -1;
+    int m_staticCityFogStartLocation = -1;
+    int m_staticCityFogEndLocation = -1;
+    int m_staticCityPositionLocation = -1;
+    int m_staticCityColorLocation = -1;
     bool m_glInitialized = false;
     bool m_staticCityVboDirty = true;
     BuildingProvider *m_buildingProvider = nullptr;

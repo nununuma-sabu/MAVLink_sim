@@ -82,6 +82,8 @@ MapView3D::~MapView3D()
     if (m_glInitialized) {
         makeCurrent();
         clearStaticCityVbos();
+        delete m_staticCityProgram;
+        m_staticCityProgram = nullptr;
         doneCurrent();
     }
 }
@@ -152,6 +154,36 @@ bool MapView3D::worldToScreen(const QVector3D &world, QPointF &screen) const
                      (0.5f - ndc.y() * 0.5f) * height());
     return screen.x() >= -80.0 && screen.x() <= width() + 80.0 &&
            screen.y() >= -30.0 && screen.y() <= height() + 30.0;
+}
+
+QMatrix4x4 MapView3D::projectionMatrix() const
+{
+    const float aspect = height() > 0
+        ? static_cast<float>(width()) / static_cast<float>(height())
+        : 1.0f;
+    const float fov = 45.0f;
+    const float nearP = 0.1f;
+    const float farP = 1000.0f;
+    const float top = nearP * qTan(qDegreesToRadians(fov / 2.0f));
+    const float right = top * aspect;
+
+    QMatrix4x4 projection;
+    projection.frustum(-right, right, -top, top, nearP, farP);
+    return projection;
+}
+
+QMatrix4x4 MapView3D::viewMatrix() const
+{
+    const float radX = qDegreesToRadians(m_cameraAngleX);
+    const float radY = qDegreesToRadians(m_cameraAngleY);
+    const QVector3D eye(
+        m_cameraTarget.x() + m_cameraDistance * qCos(radX) * qSin(radY),
+        m_cameraTarget.y() + m_cameraDistance * qSin(radX),
+        m_cameraTarget.z() + m_cameraDistance * qCos(radX) * qCos(radY));
+
+    QMatrix4x4 view;
+    view.lookAt(eye, m_cameraTarget, QVector3D(0, 1, 0));
+    return view;
 }
 
 void MapView3D::setHome(double latitude, double longitude, int radiusMeters,
@@ -235,6 +267,7 @@ void MapView3D::initializeGL()
     glFogi(GL_FOG_MODE, GL_LINEAR);
     glFogf(GL_FOG_START, 260.0f);
     glFogf(GL_FOG_END, 760.0f);
+    initializeStaticCityShader();
     uploadStaticCityMeshToGpu();
 }
 
@@ -318,6 +351,69 @@ void MapView3D::rebuildStaticCityMesh()
         uploadStaticCityMeshToGpu();
         doneCurrent();
     }
+}
+
+bool MapView3D::initializeStaticCityShader()
+{
+    if (m_staticCityProgram) {
+        return true;
+    }
+
+    m_staticCityProgram = new QOpenGLShaderProgram(this);
+    const char *vertexShader = R"(
+        attribute vec3 a_position;
+        attribute vec4 a_color;
+        uniform mat4 u_mvp;
+        uniform mat4 u_modelView;
+        varying vec4 v_color;
+        varying float v_eyeDistance;
+        void main()
+        {
+            v_color = a_color;
+            vec4 eyePos = u_modelView * vec4(a_position, 1.0);
+            v_eyeDistance = length(eyePos.xyz);
+            gl_Position = u_mvp * vec4(a_position, 1.0);
+        }
+    )";
+
+    const char *fragmentShader = R"(
+        varying vec4 v_color;
+        varying float v_eyeDistance;
+        uniform vec4 u_fogColor;
+        uniform float u_fogStart;
+        uniform float u_fogEnd;
+        void main()
+        {
+            float fogFactor = clamp((u_fogEnd - v_eyeDistance) / (u_fogEnd - u_fogStart), 0.0, 1.0);
+            vec4 color = vec4(mix(u_fogColor.rgb, v_color.rgb, fogFactor), v_color.a);
+            gl_FragColor = color;
+        }
+    )";
+
+    if (!m_staticCityProgram->addShaderFromSourceCode(QOpenGLShader::Vertex, vertexShader) ||
+        !m_staticCityProgram->addShaderFromSourceCode(QOpenGLShader::Fragment, fragmentShader) ||
+        !m_staticCityProgram->link()) {
+        qWarning() << "[MapView3D] 静的都市メッシュ用シェーダー初期化失敗:"
+                   << m_staticCityProgram->log();
+        delete m_staticCityProgram;
+        m_staticCityProgram = nullptr;
+        return false;
+    }
+
+    m_staticCityMvpLocation = m_staticCityProgram->uniformLocation("u_mvp");
+    m_staticCityModelViewLocation = m_staticCityProgram->uniformLocation("u_modelView");
+    m_staticCityFogColorLocation = m_staticCityProgram->uniformLocation("u_fogColor");
+    m_staticCityFogStartLocation = m_staticCityProgram->uniformLocation("u_fogStart");
+    m_staticCityFogEndLocation = m_staticCityProgram->uniformLocation("u_fogEnd");
+    m_staticCityPositionLocation = m_staticCityProgram->attributeLocation("a_position");
+    m_staticCityColorLocation = m_staticCityProgram->attributeLocation("a_color");
+    return m_staticCityMvpLocation >= 0
+        && m_staticCityModelViewLocation >= 0
+        && m_staticCityFogColorLocation >= 0
+        && m_staticCityFogStartLocation >= 0
+        && m_staticCityFogEndLocation >= 0
+        && m_staticCityPositionLocation >= 0
+        && m_staticCityColorLocation >= 0;
 }
 
 void MapView3D::clearStaticCityVbos()
@@ -415,8 +511,19 @@ void MapView3D::drawStaticCityMesh()
         uploadStaticCityMeshToGpu();
     }
 
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
+    if (!m_staticCityProgram && !initializeStaticCityShader()) {
+        return;
+    }
+
+    const QMatrix4x4 view = viewMatrix();
+    const QMatrix4x4 mvp = projectionMatrix() * view;
+    m_staticCityProgram->bind();
+    m_staticCityProgram->setUniformValue(m_staticCityMvpLocation, mvp);
+    m_staticCityProgram->setUniformValue(m_staticCityModelViewLocation, view);
+    m_staticCityProgram->setUniformValue(m_staticCityFogColorLocation,
+                                         QVector4D(0.42f, 0.52f, 0.62f, 1.0f));
+    m_staticCityProgram->setUniformValue(m_staticCityFogStartLocation, 260.0f);
+    m_staticCityProgram->setUniformValue(m_staticCityFogEndLocation, 760.0f);
 
     for (const StaticVboBatch &batch : m_staticCityVboBatches) {
         if (batch.vertexBuffer == 0 || batch.vertexCount <= 0) continue;
@@ -427,16 +534,25 @@ void MapView3D::drawStaticCityMesh()
         }
 
         glBindBuffer(GL_ARRAY_BUFFER, batch.vertexBuffer);
-        glVertexPointer(3, GL_FLOAT, sizeof(PackedCityVertex),
-                        reinterpret_cast<const void*>(offsetof(PackedCityVertex, x)));
-        glColorPointer(4, GL_FLOAT, sizeof(PackedCityVertex),
-                       reinterpret_cast<const void*>(offsetof(PackedCityVertex, r)));
+        m_staticCityProgram->enableAttributeArray(m_staticCityPositionLocation);
+        m_staticCityProgram->setAttributeBuffer(m_staticCityPositionLocation,
+                                                GL_FLOAT,
+                                                offsetof(PackedCityVertex, x),
+                                                3,
+                                                sizeof(PackedCityVertex));
+        m_staticCityProgram->enableAttributeArray(m_staticCityColorLocation);
+        m_staticCityProgram->setAttributeBuffer(m_staticCityColorLocation,
+                                                GL_FLOAT,
+                                                offsetof(PackedCityVertex, r),
+                                                4,
+                                                sizeof(PackedCityVertex));
         glDrawArrays(primitiveToGl(batch.primitive), 0, batch.vertexCount);
     }
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_VERTEX_ARRAY);
+    m_staticCityProgram->disableAttributeArray(m_staticCityColorLocation);
+    m_staticCityProgram->disableAttributeArray(m_staticCityPositionLocation);
+    m_staticCityProgram->release();
 }
 
 void MapView3D::drawAxes()

@@ -33,6 +33,7 @@
 
 ### Phase 3: シェーダー導入
 
+- 完了: 静的都市メッシュの描画に `QOpenGLShaderProgram` を導入し、MVP行列、頂点色、簡易フォグをシェーダー側へ移行済み
 - `QOpenGLShaderProgram` で基本シェーダーを追加する
 - `modelViewProjection`、頂点色、フォグ係数をシェーダー側へ移す
 - 固定機能の `glMatrixMode`、`glColor`、`glFog` 依存を段階的に撤去する
