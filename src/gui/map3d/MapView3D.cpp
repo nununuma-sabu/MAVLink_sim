@@ -5,6 +5,38 @@
 #include <QPainter>
 #include <QVector4D>
 #include <QDebug>
+#include <cstddef>
+
+namespace {
+
+struct PackedCityVertex {
+    GLfloat x;
+    GLfloat y;
+    GLfloat z;
+    GLfloat r;
+    GLfloat g;
+    GLfloat b;
+    GLfloat a;
+};
+
+GLenum primitiveToGl(Map3DPrimitive primitive)
+{
+    switch (primitive) {
+    case Map3DPrimitive::Lines:
+        return GL_LINES;
+    case Map3DPrimitive::Quads:
+        return GL_QUADS;
+    case Map3DPrimitive::Triangles:
+        return GL_TRIANGLES;
+    case Map3DPrimitive::TriangleFan:
+        return GL_TRIANGLE_FAN;
+    case Map3DPrimitive::LineLoop:
+        return GL_LINE_LOOP;
+    }
+    return GL_TRIANGLES;
+}
+
+} // namespace
 
 MapView3D::MapView3D(QWidget *parent)
     : QOpenGLWidget(parent)
@@ -43,6 +75,15 @@ MapView3D::MapView3D(QWidget *parent)
         update();
     });
     setHome(m_homeLat, m_homeLon, 300, m_locationName);
+}
+
+MapView3D::~MapView3D()
+{
+    if (m_glInitialized) {
+        makeCurrent();
+        clearStaticCityVbos();
+        doneCurrent();
+    }
 }
 
 QVector3D MapView3D::geoToLocal(double lat, double lon, double alt) const
@@ -181,6 +222,7 @@ void MapView3D::clearTrace()
 void MapView3D::initializeGL()
 {
     initializeOpenGLFunctions();
+    m_glInitialized = true;
     glClearColor(0.42f, 0.52f, 0.62f, 1.0f);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
@@ -193,6 +235,7 @@ void MapView3D::initializeGL()
     glFogi(GL_FOG_MODE, GL_LINEAR);
     glFogf(GL_FOG_START, 260.0f);
     glFogf(GL_FOG_END, 760.0f);
+    uploadStaticCityMeshToGpu();
 }
 
 void MapView3D::resizeGL(int w, int h)
@@ -269,6 +312,69 @@ void MapView3D::paintGL()
 void MapView3D::rebuildStaticCityMesh()
 {
     m_staticCityMesh = Map3DMeshBuilder::build(m_buildings, m_groundPaths);
+    m_staticCityVboDirty = true;
+    if (m_glInitialized) {
+        makeCurrent();
+        uploadStaticCityMeshToGpu();
+        doneCurrent();
+    }
+}
+
+void MapView3D::clearStaticCityVbos()
+{
+    for (const StaticVboBatch &batch : m_staticCityVboBatches) {
+        if (batch.vertexBuffer != 0) {
+            GLuint buffer = batch.vertexBuffer;
+            glDeleteBuffers(1, &buffer);
+        }
+    }
+    m_staticCityVboBatches.clear();
+}
+
+void MapView3D::uploadStaticCityMeshToGpu()
+{
+    if (!m_glInitialized || !m_staticCityVboDirty) {
+        return;
+    }
+
+    clearStaticCityVbos();
+
+    for (const Map3DMeshBatch &batch : m_staticCityMesh.batches) {
+        if (batch.vertices.isEmpty()) continue;
+
+        QVector<PackedCityVertex> packed;
+        packed.reserve(batch.vertices.size());
+        for (const Map3DVertex &vertex : batch.vertices) {
+            const QColor &color = vertex.color;
+            packed.append({
+                vertex.position.x(),
+                vertex.position.y(),
+                vertex.position.z(),
+                static_cast<GLfloat>(color.redF()),
+                static_cast<GLfloat>(color.greenF()),
+                static_cast<GLfloat>(color.blueF()),
+                static_cast<GLfloat>(color.alphaF())
+            });
+        }
+
+        GLuint buffer = 0;
+        glGenBuffers(1, &buffer);
+        glBindBuffer(GL_ARRAY_BUFFER, buffer);
+        glBufferData(GL_ARRAY_BUFFER,
+                     static_cast<GLsizeiptr>(packed.size() * sizeof(PackedCityVertex)),
+                     packed.constData(),
+                     GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+        StaticVboBatch vboBatch;
+        vboBatch.primitive = batch.primitive;
+        vboBatch.vertexBuffer = buffer;
+        vboBatch.vertexCount = packed.size();
+        vboBatch.lineWidth = batch.lineWidth;
+        m_staticCityVboBatches.append(vboBatch);
+    }
+
+    m_staticCityVboDirty = false;
 }
 
 void MapView3D::drawSkyGradient()
@@ -305,39 +411,32 @@ void MapView3D::drawStaticCityMesh()
     if (m_staticCityMesh.isEmpty()) {
         rebuildStaticCityMesh();
     }
+    if (m_staticCityVboDirty) {
+        uploadStaticCityMeshToGpu();
+    }
 
-    auto primitiveToGl = [](Map3DPrimitive primitive) {
-        switch (primitive) {
-        case Map3DPrimitive::Lines:
-            return GL_LINES;
-        case Map3DPrimitive::Quads:
-            return GL_QUADS;
-        case Map3DPrimitive::Triangles:
-            return GL_TRIANGLES;
-        case Map3DPrimitive::TriangleFan:
-            return GL_TRIANGLE_FAN;
-        case Map3DPrimitive::LineLoop:
-            return GL_LINE_LOOP;
-        }
-        return GL_TRIANGLES;
-    };
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glEnableClientState(GL_COLOR_ARRAY);
 
-    for (const Map3DMeshBatch &batch : m_staticCityMesh.batches) {
-        if (batch.vertices.isEmpty()) continue;
+    for (const StaticVboBatch &batch : m_staticCityVboBatches) {
+        if (batch.vertexBuffer == 0 || batch.vertexCount <= 0) continue;
 
         if (batch.primitive == Map3DPrimitive::Lines ||
             batch.primitive == Map3DPrimitive::LineLoop) {
             glLineWidth(batch.lineWidth);
         }
 
-        glBegin(primitiveToGl(batch.primitive));
-        for (const Map3DVertex &vertex : batch.vertices) {
-            const QColor &color = vertex.color;
-            glColor4f(color.redF(), color.greenF(), color.blueF(), color.alphaF());
-            glVertex3f(vertex.position.x(), vertex.position.y(), vertex.position.z());
-        }
-        glEnd();
+        glBindBuffer(GL_ARRAY_BUFFER, batch.vertexBuffer);
+        glVertexPointer(3, GL_FLOAT, sizeof(PackedCityVertex),
+                        reinterpret_cast<const void*>(offsetof(PackedCityVertex, x)));
+        glColorPointer(4, GL_FLOAT, sizeof(PackedCityVertex),
+                       reinterpret_cast<const void*>(offsetof(PackedCityVertex, r)));
+        glDrawArrays(primitiveToGl(batch.primitive), 0, batch.vertexCount);
     }
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glDisableClientState(GL_COLOR_ARRAY);
+    glDisableClientState(GL_VERTEX_ARRAY);
 }
 
 void MapView3D::drawAxes()

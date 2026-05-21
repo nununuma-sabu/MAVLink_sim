@@ -28,6 +28,7 @@ class MapView3D : public QOpenGLWidget, protected QOpenGLFunctions
 
 public:
     explicit MapView3D(QWidget *parent = nullptr);
+    ~MapView3D() override;
 
     /// ドローン位置・姿勢を更新
     void updateDrone(double latitude, double longitude, double altitude,
@@ -78,6 +79,15 @@ private:
     QVector3D buildingCenter(const BuildingData &building) const;
     bool worldToScreen(const QVector3D &world, QPointF &screen) const;
     void rebuildStaticCityMesh();
+    void uploadStaticCityMeshToGpu();
+    void clearStaticCityVbos();
+
+    struct StaticVboBatch {
+        Map3DPrimitive primitive = Map3DPrimitive::Triangles;
+        GLuint vertexBuffer = 0;
+        int vertexCount = 0;
+        float lineWidth = 1.0f;
+    };
 
     // カメラパラメータ
     float m_cameraDistance = 40.0f;
@@ -122,6 +132,9 @@ private:
     QVector<BuildingData> m_buildings;
     QVector<GroundPathData> m_groundPaths;
     Map3DStaticMesh m_staticCityMesh;
+    QVector<StaticVboBatch> m_staticCityVboBatches;
+    bool m_glInitialized = false;
+    bool m_staticCityVboDirty = true;
     BuildingProvider *m_buildingProvider = nullptr;
     QString m_locationName = "練馬駅";
     QString m_buildingStatus = "建物データ: 未読み込み";

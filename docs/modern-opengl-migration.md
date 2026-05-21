@@ -25,7 +25,8 @@
 
 ### Phase 2: VBO導入
 
-- 静的都市メッシュを `QOpenGLBuffer` にアップロードする
+- 完了: `Map3DStaticMesh` をGPU上のVBOへアップロードし、静的都市要素を `glDrawArrays` で描画するように移行済み
+- 静的都市メッシュをOpenGLのVBOにアップロードする
 - `glDrawArrays` / `glDrawElements` で描画する
 - 建物壁面、屋根、道路帯、線路、地面をプリミティブ種別ごとにバッチ化する
 - 地点切り替え、OSM再取得、キャッシュ読み込み時だけVBOを再構築する
