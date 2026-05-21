@@ -30,3 +30,4 @@ src/gui/
 - `map3d/`
   - 3D ビューと、その表示に必要な地理データ取得・読み込みを担当します。
   - OpenStreetMap / Overpass API 由来の建物、道路、線路、地面表現を扱います。
+  - 現状の描画は固定機能パイプライン中心です。VBO/シェーダーへの移行方針は `docs/modern-opengl-migration.md` にまとめています。
