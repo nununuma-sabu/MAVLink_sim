@@ -48,6 +48,7 @@ MapView3D::MapView3D(QWidget *parent)
     connect(&m_animTimer, &QTimer::timeout, [this]() {
         m_propellerAngle += 15.0f;
         if (m_propellerAngle >= 360.0f) m_propellerAngle -= 360.0f;
+        m_droneModelVboDirty = true;
         update();
     });
     m_animTimer.start(33); // ~30fps
@@ -229,6 +230,7 @@ void MapView3D::updateDrone(double latitude, double longitude, double altitude,
     m_droneRoll = static_cast<float>(qRadiansToDegrees(roll));
     m_dronePitch = static_cast<float>(qRadiansToDegrees(pitch));
     m_droneYaw = static_cast<float>(qRadiansToDegrees(yaw));
+    m_droneModelVboDirty = true;
 
     // トレース追加
     if (m_tracePath.isEmpty() ||
@@ -278,6 +280,7 @@ void MapView3D::initializeGL()
     uploadTraceToGpu();
     uploadWaypointPathToGpu();
     uploadWaypointMarkersToGpu();
+    uploadDroneModelToGpu();
 }
 
 void MapView3D::resizeGL(int w, int h)
@@ -500,10 +503,15 @@ void MapView3D::clearDynamicVbos()
         glDeleteBuffers(1, &m_waypointMarkerLineVbo);
         m_waypointMarkerLineVbo = 0;
     }
+    if (m_droneModelVbo != 0) {
+        glDeleteBuffers(1, &m_droneModelVbo);
+        m_droneModelVbo = 0;
+    }
     m_traceVboCount = 0;
     m_waypointPathVboCount = 0;
     m_waypointMarkerTriangleVboCount = 0;
     m_waypointMarkerLineVboCount = 0;
+    m_droneModelVboCount = 0;
 }
 
 void MapView3D::uploadTraceToGpu()
@@ -692,6 +700,162 @@ void MapView3D::uploadWaypointMarkersToGpu()
     m_waypointMarkerVboDirty = false;
 }
 
+void MapView3D::uploadDroneModelToGpu()
+{
+    if (!m_glInitialized || !m_droneModelVboDirty) {
+        return;
+    }
+
+    QVector<PackedCityVertex> triangles;
+    triangles.reserve(180);
+
+    QMatrix4x4 model;
+    model.translate(m_dronePos);
+    model.rotate(-m_droneYaw, 0.0f, 1.0f, 0.0f);
+    model.rotate(m_dronePitch, 1.0f, 0.0f, 0.0f);
+    model.rotate(-m_droneRoll, 0.0f, 0.0f, 1.0f);
+
+    auto transformed = [&model](const QVector3D &point) {
+        return (model * QVector4D(point, 1.0f)).toVector3D();
+    };
+    auto appendVertex = [&triangles](const QVector3D &pos, const QVector4D &color) {
+        triangles.append({
+            pos.x(),
+            pos.y(),
+            pos.z(),
+            color.x(),
+            color.y(),
+            color.z(),
+            color.w()
+        });
+    };
+    auto appendTriangle = [&](const QVector3D &a,
+                              const QVector3D &b,
+                              const QVector3D &c,
+                              const QVector4D &color) {
+        appendVertex(transformed(a), color);
+        appendVertex(transformed(b), color);
+        appendVertex(transformed(c), color);
+    };
+    auto appendQuad = [&](const QVector3D &a,
+                          const QVector3D &b,
+                          const QVector3D &c,
+                          const QVector3D &d,
+                          const QVector4D &color) {
+        appendTriangle(a, b, c, color);
+        appendTriangle(a, c, d, color);
+    };
+    auto appendBox = [&](float minX, float maxX,
+                         float minY, float maxY,
+                         float minZ, float maxZ,
+                         const QVector4D &topColor,
+                         const QVector4D &bottomColor,
+                         const QVector4D &frontColor,
+                         const QVector4D &sideColor) {
+        appendQuad({minX, maxY, minZ}, {maxX, maxY, minZ},
+                   {maxX, maxY, maxZ}, {minX, maxY, maxZ}, topColor);
+        appendQuad({minX, minY, minZ}, {minX, minY, maxZ},
+                   {maxX, minY, maxZ}, {maxX, minY, minZ}, bottomColor);
+        appendQuad({minX, minY, minZ}, {maxX, minY, minZ},
+                   {maxX, maxY, minZ}, {minX, maxY, minZ}, frontColor);
+        appendQuad({minX, minY, maxZ}, {minX, maxY, maxZ},
+                   {maxX, maxY, maxZ}, {maxX, minY, maxZ}, sideColor);
+        appendQuad({minX, minY, minZ}, {minX, maxY, minZ},
+                   {minX, maxY, maxZ}, {minX, minY, maxZ}, sideColor);
+        appendQuad({maxX, minY, minZ}, {maxX, minY, maxZ},
+                   {maxX, maxY, maxZ}, {maxX, maxY, minZ}, sideColor);
+    };
+
+    const float bodySize = 0.8f;
+    const float bs = bodySize * 0.5f;
+    const float bh = 0.15f;
+    appendBox(-bs, bs, -bh, bh, -bs, bs,
+              QVector4D(0.35f, 0.35f, 0.40f, 1.0f),
+              QVector4D(0.25f, 0.25f, 0.30f, 1.0f),
+              QVector4D(0.9f, 0.3f, 0.2f, 1.0f),
+              QVector4D(0.3f, 0.3f, 0.35f, 1.0f));
+
+    const float armLen = 1.5f;
+    const float armW = 0.08f;
+    const float armH = 0.05f;
+    struct ArmDir { float dx; float dz; };
+    const ArmDir arms[4] = {{1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
+
+    for (const ArmDir &arm : arms) {
+        const float ex = arm.dx * armLen * 0.707f;
+        const float ez = arm.dz * armLen * 0.707f;
+        const QVector3D a(-armW * arm.dz, armH, -armW * (-arm.dx));
+        const QVector3D b( armW * arm.dz, armH,  armW * (-arm.dx));
+        const QVector3D c( armW * arm.dz + ex, armH,  armW * (-arm.dx) + ez);
+        const QVector3D d(-armW * arm.dz + ex, armH, -armW * (-arm.dx) + ez);
+        const QVector3D e(a.x(), -armH, a.z());
+        const QVector3D f(b.x(), -armH, b.z());
+        const QVector3D g(c.x(), -armH, c.z());
+        const QVector3D h(d.x(), -armH, d.z());
+        const QVector4D armColor(0.4f, 0.4f, 0.45f, 1.0f);
+        appendQuad(a, b, c, d, armColor);
+        appendQuad(e, h, g, f, armColor);
+
+        const float motorRadius = 0.15f;
+        const float motorTop = 0.2f;
+        const QVector4D motorColor(0.5f, 0.5f, 0.55f, 1.0f);
+        for (int i = 0; i < 12; ++i) {
+            const float a0 = qDegreesToRadians(i * 30.0f);
+            const float a1 = qDegreesToRadians((i + 1) * 30.0f);
+            const QVector3D lower0(ex + static_cast<float>(motorRadius * qCos(a0)),
+                                    armH,
+                                    ez + static_cast<float>(motorRadius * qSin(a0)));
+            const QVector3D lower1(ex + static_cast<float>(motorRadius * qCos(a1)),
+                                    armH,
+                                    ez + static_cast<float>(motorRadius * qSin(a1)));
+            const QVector3D upper1(lower1.x(), motorTop, lower1.z());
+            const QVector3D upper0(lower0.x(), motorTop, lower0.z());
+            appendQuad(lower0, lower1, upper1, upper0,
+                       motorColor);
+        }
+
+        QMatrix4x4 propeller;
+        propeller.translate(ex, motorTop + 0.02f, ez);
+        propeller.rotate(m_propellerAngle * arm.dx, 0.0f, 1.0f, 0.0f);
+        auto propPoint = [&propeller](const QVector3D &point) {
+            return (propeller * QVector4D(point, 1.0f)).toVector3D();
+        };
+
+        const float propR = 0.9f;
+        const QVector4D propColor = arm.dz < 0
+            ? QVector4D(0.9f, 0.3f, 0.2f, 0.6f)
+            : QVector4D(0.2f, 0.5f, 0.9f, 0.6f);
+        appendTriangle(propPoint({0.0f, 0.0f, 0.0f}),
+                       propPoint({propR, 0.0f, 0.06f}),
+                       propPoint({propR, 0.0f, -0.06f}),
+                       propColor);
+        appendTriangle(propPoint({0.0f, 0.0f, 0.0f}),
+                       propPoint({-propR, 0.0f, 0.06f}),
+                       propPoint({-propR, 0.0f, -0.06f}),
+                       propColor);
+    }
+
+    const QVector4D frontLed(0.0f, 1.0f, 0.0f, 1.0f);
+    const QVector4D rearLed(1.0f, 0.0f, 0.0f, 1.0f);
+    appendBox(-0.08f, 0.08f, -bh - 0.01f, -bh + 0.01f, -bs - 0.16f, -bs - 0.08f,
+              frontLed, frontLed, frontLed, frontLed);
+    appendBox(-0.08f, 0.08f, -bh - 0.01f, -bh + 0.01f, bs + 0.08f, bs + 0.16f,
+              rearLed, rearLed, rearLed, rearLed);
+
+    if (m_droneModelVbo == 0) {
+        glGenBuffers(1, &m_droneModelVbo);
+    }
+    glBindBuffer(GL_ARRAY_BUFFER, m_droneModelVbo);
+    glBufferData(GL_ARRAY_BUFFER,
+                 static_cast<GLsizeiptr>(triangles.size() * sizeof(PackedCityVertex)),
+                 triangles.constData(),
+                 GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    m_droneModelVboCount = triangles.size();
+    m_droneModelVboDirty = false;
+}
+
 void MapView3D::drawDynamicVbo(GLuint buffer, int vertexCount, GLenum primitive, float lineWidth)
 {
     if (buffer == 0 || vertexCount <= 0) {
@@ -858,119 +1022,10 @@ void MapView3D::drawHomeMarker()
 
 void MapView3D::drawDrone()
 {
-    glPushMatrix();
-    glTranslatef(m_dronePos.x(), m_dronePos.y(), m_dronePos.z());
-    glRotatef(-m_droneYaw, 0, 1, 0);    // ヨー
-    glRotatef(m_dronePitch, 1, 0, 0);    // ピッチ
-    glRotatef(-m_droneRoll, 0, 0, 1);    // ロール
-
-    float bodySize = 0.8f;
-    float armLen = 1.5f;
-
-    // === メインボディ（中央の箱） ===
-    glColor4f(0.3f, 0.3f, 0.35f, 1.0f);
-    float bs = bodySize * 0.5f;
-    float bh = 0.15f;
-    glBegin(GL_QUADS);
-    // 上面
-    glColor4f(0.35f, 0.35f, 0.40f, 1.0f);
-    glVertex3f(-bs, bh, -bs); glVertex3f(bs, bh, -bs);
-    glVertex3f(bs, bh, bs);  glVertex3f(-bs, bh, bs);
-    // 下面
-    glColor4f(0.25f, 0.25f, 0.30f, 1.0f);
-    glVertex3f(-bs, -bh, -bs); glVertex3f(bs, -bh, -bs);
-    glVertex3f(bs, -bh, bs);  glVertex3f(-bs, -bh, bs);
-    // 前面
-    glColor4f(0.9f, 0.3f, 0.2f, 1.0f); // 前方は赤
-    glVertex3f(-bs, -bh, -bs); glVertex3f(bs, -bh, -bs);
-    glVertex3f(bs, bh, -bs);  glVertex3f(-bs, bh, -bs);
-    // 背面
-    glColor4f(0.3f, 0.3f, 0.35f, 1.0f);
-    glVertex3f(-bs, -bh, bs); glVertex3f(bs, -bh, bs);
-    glVertex3f(bs, bh, bs);  glVertex3f(-bs, bh, bs);
-    // 左面
-    glVertex3f(-bs, -bh, -bs); glVertex3f(-bs, -bh, bs);
-    glVertex3f(-bs, bh, bs);  glVertex3f(-bs, bh, -bs);
-    // 右面
-    glVertex3f(bs, -bh, -bs); glVertex3f(bs, -bh, bs);
-    glVertex3f(bs, bh, bs);  glVertex3f(bs, bh, -bs);
-    glEnd();
-
-    // === アーム (4本 X字型) ===
-    float armW = 0.08f;
-    float armH = 0.05f;
-    struct ArmDir { float dx; float dz; };
-    ArmDir arms[4] = {{1,1}, {1,-1}, {-1,1}, {-1,-1}};
-
-    for (auto &arm : arms) {
-        float ex = arm.dx * armLen * 0.707f;
-        float ez = arm.dz * armLen * 0.707f;
-
-        glColor4f(0.4f, 0.4f, 0.45f, 1.0f);
-        glBegin(GL_QUADS);
-        // 上面
-        glVertex3f(-armW * arm.dz + 0, armH, -armW * (-arm.dx) + 0);
-        glVertex3f( armW * arm.dz + 0, armH,  armW * (-arm.dx) + 0);
-        glVertex3f( armW * arm.dz + ex, armH,  armW * (-arm.dx) + ez);
-        glVertex3f(-armW * arm.dz + ex, armH, -armW * (-arm.dx) + ez);
-        // 下面
-        glVertex3f(-armW * arm.dz + 0, -armH, -armW * (-arm.dx) + 0);
-        glVertex3f( armW * arm.dz + 0, -armH,  armW * (-arm.dx) + 0);
-        glVertex3f( armW * arm.dz + ex, -armH,  armW * (-arm.dx) + ez);
-        glVertex3f(-armW * arm.dz + ex, -armH, -armW * (-arm.dx) + ez);
-        glEnd();
-
-        // === モーター（シリンダ風の円柱） ===
-        float mR = 0.15f;
-        float mH2 = 0.2f;
-        glColor4f(0.5f, 0.5f, 0.55f, 1.0f);
-        glBegin(GL_QUAD_STRIP);
-        for (int i = 0; i <= 12; i++) {
-            float a = qDegreesToRadians(i * 30.0f);
-            float mx = ex + mR * qCos(a);
-            float mz = ez + mR * qSin(a);
-            glVertex3f(mx, mH2, mz);
-            glVertex3f(mx, armH, mz);
-        }
-        glEnd();
-
-        // === プロペラ ===
-        float propR = 0.9f;
-        glPushMatrix();
-        glTranslatef(ex, mH2 + 0.02f, ez);
-        glRotatef(m_propellerAngle * arm.dx, 0, 1, 0);
-
-        // 前方アーム: 赤プロペラ、後方: 青プロペラ
-        if (arm.dz < 0) {
-            glColor4f(0.9f, 0.3f, 0.2f, 0.6f);
-        } else {
-            glColor4f(0.2f, 0.5f, 0.9f, 0.6f);
-        }
-
-        glBegin(GL_TRIANGLES);
-        // ブレード1
-        glVertex3f(0, 0, 0);
-        glVertex3f(propR, 0, 0.06f);
-        glVertex3f(propR, 0, -0.06f);
-        // ブレード2
-        glVertex3f(0, 0, 0);
-        glVertex3f(-propR, 0, 0.06f);
-        glVertex3f(-propR, 0, -0.06f);
-        glEnd();
-
-        glPopMatrix();
+    if (m_droneModelVboDirty) {
+        uploadDroneModelToGpu();
     }
-
-    // === LED (前方 緑、後方 赤) ===
-    glPointSize(6.0f);
-    glBegin(GL_POINTS);
-    glColor3f(0.0f, 1.0f, 0.0f);
-    glVertex3f(0, -bh, -bs - 0.1f);
-    glColor3f(1.0f, 0.0f, 0.0f);
-    glVertex3f(0, -bh, bs + 0.1f);
-    glEnd();
-
-    glPopMatrix();
+    drawDynamicVbo(m_droneModelVbo, m_droneModelVboCount, GL_TRIANGLES, 1.0f);
 }
 
 void MapView3D::drawTrace()

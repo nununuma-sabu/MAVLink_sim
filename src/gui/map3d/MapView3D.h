@@ -85,6 +85,7 @@ private:
     void uploadTraceToGpu();
     void uploadWaypointPathToGpu();
     void uploadWaypointMarkersToGpu();
+    void uploadDroneModelToGpu();
     void clearDynamicVbos();
     void drawDynamicVbo(GLuint buffer, int vertexCount, GLenum primitive, float lineWidth);
     bool initializeStaticCityShader();
@@ -153,6 +154,9 @@ private:
     GLuint m_waypointMarkerLineVbo = 0;
     int m_waypointMarkerLineVboCount = 0;
     bool m_waypointMarkerVboDirty = true;
+    GLuint m_droneModelVbo = 0;
+    int m_droneModelVboCount = 0;
+    bool m_droneModelVboDirty = true;
     QOpenGLShaderProgram *m_staticCityProgram = nullptr;
     int m_staticCityMvpLocation = -1;
     int m_staticCityModelViewLocation = -1;
