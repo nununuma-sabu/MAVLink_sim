@@ -11,6 +11,7 @@
 #include <QTimer>
 #include "core/GeoUtils.h"
 #include "BuildingProvider.h"
+#include "Map3DMesh.h"
 
 struct MissionItem;
 
@@ -60,7 +61,6 @@ protected:
     void wheelEvent(QWheelEvent *event) override;
 
 private:
-    void drawGrid();
     void drawSkyGradient();
     void drawAxes();
     void drawDrone();
@@ -70,24 +70,14 @@ private:
     void drawHomeMarker();
     void drawHUD();
     void drawWaypoints();
-    void drawBuildings();
-    void drawGroundTexture();
-    void drawGroundPaths();
-    void drawPathBand(const GroundPathData &path);
-    void drawRoadMarkings(const GroundPathData &path, float halfWidth);
-    void drawCrosswalk(const QVector3D &center, const QVector3D &dir,
-                       const QVector3D &normal, float halfWidth);
-    void drawRailwayDetails(const GroundPathData &path);
-    void drawRoof(const BuildingData &building);
-    void drawBuildingDetails(const BuildingData &building);
+    void drawStaticCityMesh();
     void drawBuildingLabels(QPainter &painter);
 
     QVector3D geoToLocal(double lat, double lon, double alt) const;
     QVector3D buildingPointToLocal(const QVector2D &point, float altitude) const;
-    QVector3D pathPointToLocal(const QVector2D &point, float altitude = 0.02f) const;
     QVector3D buildingCenter(const BuildingData &building) const;
-    float lightForWall(const QVector3D &a, const QVector3D &b, int wallIndex) const;
     bool worldToScreen(const QVector3D &world, QPointF &screen) const;
+    void rebuildStaticCityMesh();
 
     // カメラパラメータ
     float m_cameraDistance = 40.0f;
@@ -131,6 +121,7 @@ private:
     // 建物
     QVector<BuildingData> m_buildings;
     QVector<GroundPathData> m_groundPaths;
+    Map3DStaticMesh m_staticCityMesh;
     BuildingProvider *m_buildingProvider = nullptr;
     QString m_locationName = "練馬駅";
     QString m_buildingStatus = "建物データ: 未読み込み";

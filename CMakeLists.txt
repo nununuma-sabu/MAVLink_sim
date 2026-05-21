@@ -61,6 +61,8 @@ set(GUI_SOURCES
     src/gui/map3d/BuildingLoader.cpp
     src/gui/map3d/BuildingProvider.h
     src/gui/map3d/BuildingProvider.cpp
+    src/gui/map3d/Map3DMesh.h
+    src/gui/map3d/Map3DMesh.cpp
     src/gui/map3d/MapView3D.h
     src/gui/map3d/MapView3D.cpp
 )
