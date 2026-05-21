@@ -5,8 +5,8 @@
 
 namespace Geo {
 
-static constexpr double NerimaStationLat = 35.7378;
-static constexpr double NerimaStationLon = 139.6542;
+static constexpr double NerimaStationLat = 35.73755;
+static constexpr double NerimaStationLon = 139.65425;
 static constexpr double MetersPerDegreeLatitude = 111320.0;
 
 struct GeoPoint {

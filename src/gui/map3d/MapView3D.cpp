@@ -209,6 +209,7 @@ void MapView3D::setHome(double latitude, double longitude, int radiusMeters,
     m_activeWpIndex = -1;
     m_traceVboDirty = true;
     m_waypointPathVboDirty = true;
+    m_waypointMarkerVboDirty = true;
     m_buildings.clear();
     m_groundPaths.clear();
     rebuildStaticCityMesh();
@@ -276,6 +277,7 @@ void MapView3D::initializeGL()
     uploadStaticCityMeshToGpu();
     uploadTraceToGpu();
     uploadWaypointPathToGpu();
+    uploadWaypointMarkersToGpu();
 }
 
 void MapView3D::resizeGL(int w, int h)
@@ -490,8 +492,18 @@ void MapView3D::clearDynamicVbos()
         glDeleteBuffers(1, &m_waypointPathVbo);
         m_waypointPathVbo = 0;
     }
+    if (m_waypointMarkerTriangleVbo != 0) {
+        glDeleteBuffers(1, &m_waypointMarkerTriangleVbo);
+        m_waypointMarkerTriangleVbo = 0;
+    }
+    if (m_waypointMarkerLineVbo != 0) {
+        glDeleteBuffers(1, &m_waypointMarkerLineVbo);
+        m_waypointMarkerLineVbo = 0;
+    }
     m_traceVboCount = 0;
     m_waypointPathVboCount = 0;
+    m_waypointMarkerTriangleVboCount = 0;
+    m_waypointMarkerLineVboCount = 0;
 }
 
 void MapView3D::uploadTraceToGpu()
@@ -574,6 +586,110 @@ void MapView3D::uploadWaypointPathToGpu()
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     m_waypointPathVboCount = packed.size();
     m_waypointPathVboDirty = false;
+}
+
+void MapView3D::uploadWaypointMarkersToGpu()
+{
+    if (!m_glInitialized || !m_waypointMarkerVboDirty) {
+        return;
+    }
+
+    if (m_waypoints.isEmpty()) {
+        m_waypointMarkerTriangleVboCount = 0;
+        m_waypointMarkerLineVboCount = 0;
+        m_waypointMarkerVboDirty = false;
+        return;
+    }
+
+    QVector<PackedCityVertex> triangles;
+    QVector<PackedCityVertex> lines;
+    triangles.reserve(m_waypoints.size() * 48);
+    lines.reserve(m_waypoints.size() * 26);
+
+    auto appendVertex = [](QVector<PackedCityVertex> &vertices,
+                           const QVector3D &pos,
+                           const QVector4D &color) {
+        vertices.append({
+            pos.x(),
+            pos.y(),
+            pos.z(),
+            color.x(),
+            color.y(),
+            color.z(),
+            color.w()
+        });
+    };
+
+    for (int i = 0; i < m_waypoints.size(); ++i) {
+        const WpData &wp = m_waypoints[i];
+        const bool isActive = (i == m_activeWpIndex);
+        const float r = isActive ? 1.2f : 0.8f;
+        const float h = r * 0.7f;
+        const QVector4D markerColor = isActive
+            ? QVector4D(1.0f, 0.78f, 0.0f, 0.9f)
+            : QVector4D(0.9f, 0.3f, 0.24f, 0.8f);
+        const QVector4D guideColor(0.9f, 0.3f, 0.24f, 0.3f);
+        const QVector4D groundColor(0.9f, 0.3f, 0.24f, 0.2f);
+
+        QVector<QVector3D> ring;
+        ring.reserve(9);
+        for (int j = 0; j <= 8; ++j) {
+            const float a = qDegreesToRadians(j * 45.0f);
+            ring.append(wp.pos + QVector3D(r * qCos(a), 0.0f, r * qSin(a)));
+        }
+
+        const QVector3D top = wp.pos + QVector3D(0.0f, h, 0.0f);
+        const QVector3D bottom = wp.pos + QVector3D(0.0f, -h, 0.0f);
+        for (int j = 0; j < 8; ++j) {
+            appendVertex(triangles, top, markerColor);
+            appendVertex(triangles, ring[j], markerColor);
+            appendVertex(triangles, ring[j + 1], markerColor);
+
+            appendVertex(triangles, bottom, markerColor);
+            appendVertex(triangles, ring[j + 1], markerColor);
+            appendVertex(triangles, ring[j], markerColor);
+        }
+
+        appendVertex(lines, wp.pos, guideColor);
+        appendVertex(lines, QVector3D(wp.pos.x(), 0.0f, wp.pos.z()), guideColor);
+
+        const float groundRadius = r * 0.6f;
+        QVector<QVector3D> groundRing;
+        groundRing.reserve(12);
+        for (int j = 0; j < 12; ++j) {
+            const float a = qDegreesToRadians(j * 30.0f);
+            groundRing.append(QVector3D(wp.pos.x() + groundRadius * qCos(a),
+                                        0.02f,
+                                        wp.pos.z() + groundRadius * qSin(a)));
+        }
+        for (int j = 0; j < groundRing.size(); ++j) {
+            appendVertex(lines, groundRing[j], groundColor);
+            appendVertex(lines, groundRing[(j + 1) % groundRing.size()], groundColor);
+        }
+    }
+
+    if (m_waypointMarkerTriangleVbo == 0) {
+        glGenBuffers(1, &m_waypointMarkerTriangleVbo);
+    }
+    glBindBuffer(GL_ARRAY_BUFFER, m_waypointMarkerTriangleVbo);
+    glBufferData(GL_ARRAY_BUFFER,
+                 static_cast<GLsizeiptr>(triangles.size() * sizeof(PackedCityVertex)),
+                 triangles.constData(),
+                 GL_DYNAMIC_DRAW);
+
+    if (m_waypointMarkerLineVbo == 0) {
+        glGenBuffers(1, &m_waypointMarkerLineVbo);
+    }
+    glBindBuffer(GL_ARRAY_BUFFER, m_waypointMarkerLineVbo);
+    glBufferData(GL_ARRAY_BUFFER,
+                 static_cast<GLsizeiptr>(lines.size() * sizeof(PackedCityVertex)),
+                 lines.constData(),
+                 GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    m_waypointMarkerTriangleVboCount = triangles.size();
+    m_waypointMarkerLineVboCount = lines.size();
+    m_waypointMarkerVboDirty = false;
 }
 
 void MapView3D::drawDynamicVbo(GLuint buffer, int vertexCount, GLenum primitive, float lineWidth)
@@ -1115,6 +1231,7 @@ void MapView3D::setWaypoints(const QVector<MissionItem> &items)
         m_waypoints.append(wp);
     }
     m_waypointPathVboDirty = true;
+    m_waypointMarkerVboDirty = true;
     update();
 }
 
@@ -1122,6 +1239,7 @@ void MapView3D::setActiveWaypoint(int index)
 {
     m_activeWpIndex = index;
     m_waypointPathVboDirty = true;
+    m_waypointMarkerVboDirty = true;
     update();
 }
 
@@ -1135,61 +1253,15 @@ void MapView3D::drawWaypoints()
     }
     drawDynamicVbo(m_waypointPathVbo, m_waypointPathVboCount, GL_LINE_STRIP, 2.0f);
 
-    // WPマーカー（球体の代わりに八角形ダイヤモンド）
-    for (int i = 0; i < m_waypoints.size(); i++) {
-        const auto &wp = m_waypoints[i];
-
-        bool isActive = (i == m_activeWpIndex);
-        float r = isActive ? 1.2f : 0.8f;
-
-        glPushMatrix();
-        glTranslatef(wp.pos.x(), wp.pos.y(), wp.pos.z());
-
-        // ポイントマーカー
-        if (isActive) {
-            glColor4f(1.0f, 0.78f, 0.0f, 0.9f); // 黄
-        } else {
-            glColor4f(0.9f, 0.3f, 0.24f, 0.8f); // 赤
-        }
-
-        // 3Dダイヤモンド（上下のピラミッド）
-        float h = r * 0.7f;
-        glBegin(GL_TRIANGLE_FAN);
-        glVertex3f(0, h, 0); // 頂点
-        for (int j = 0; j <= 8; j++) {
-            float a = qDegreesToRadians(j * 45.0f);
-            glVertex3f(r * qCos(a), 0, r * qSin(a));
-        }
-        glEnd();
-
-        glBegin(GL_TRIANGLE_FAN);
-        glVertex3f(0, -h, 0); // 底点
-        for (int j = 0; j <= 8; j++) {
-            float a = qDegreesToRadians(j * 45.0f);
-            glVertex3f(r * qCos(a), 0, r * qSin(a));
-        }
-        glEnd();
-
-        // 地面への垂直線
-        glLineWidth(1.0f);
-        glEnable(GL_LINE_STIPPLE);
-        glLineStipple(2, 0xAAAA);
-        glColor4f(0.9f, 0.3f, 0.24f, 0.3f);
-        glBegin(GL_LINES);
-        glVertex3f(0, 0, 0);
-        glVertex3f(0, -wp.pos.y(), 0);
-        glEnd();
-        glDisable(GL_LINE_STIPPLE);
-
-        // 地面マーカー
-        glColor4f(0.9f, 0.3f, 0.24f, 0.2f);
-        glBegin(GL_LINE_LOOP);
-        for (int j = 0; j < 12; j++) {
-            float a = qDegreesToRadians(j * 30.0f);
-            glVertex3f(r * 0.6f * qCos(a), -wp.pos.y() + 0.02f, r * 0.6f * qSin(a));
-        }
-        glEnd();
-
-        glPopMatrix();
+    if (m_waypointMarkerVboDirty) {
+        uploadWaypointMarkersToGpu();
     }
+    drawDynamicVbo(m_waypointMarkerTriangleVbo,
+                   m_waypointMarkerTriangleVboCount,
+                   GL_TRIANGLES,
+                   1.0f);
+    drawDynamicVbo(m_waypointMarkerLineVbo,
+                   m_waypointMarkerLineVboCount,
+                   GL_LINES,
+                   1.0f);
 }

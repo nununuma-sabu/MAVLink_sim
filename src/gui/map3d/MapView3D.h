@@ -84,6 +84,7 @@ private:
     void clearStaticCityVbos();
     void uploadTraceToGpu();
     void uploadWaypointPathToGpu();
+    void uploadWaypointMarkersToGpu();
     void clearDynamicVbos();
     void drawDynamicVbo(GLuint buffer, int vertexCount, GLenum primitive, float lineWidth);
     bool initializeStaticCityShader();
@@ -147,6 +148,11 @@ private:
     GLuint m_waypointPathVbo = 0;
     int m_waypointPathVboCount = 0;
     bool m_waypointPathVboDirty = true;
+    GLuint m_waypointMarkerTriangleVbo = 0;
+    int m_waypointMarkerTriangleVboCount = 0;
+    GLuint m_waypointMarkerLineVbo = 0;
+    int m_waypointMarkerLineVboCount = 0;
+    bool m_waypointMarkerVboDirty = true;
     QOpenGLShaderProgram *m_staticCityProgram = nullptr;
     int m_staticCityMvpLocation = -1;
     int m_staticCityModelViewLocation = -1;

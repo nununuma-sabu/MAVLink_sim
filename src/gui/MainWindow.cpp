@@ -376,7 +376,7 @@ void MainWindow::resetSimulationToLocation(const MapLocation &location)
                          location.name, location.cameraDistance,
                          location.cameraAngleX, location.cameraAngleY);
     m_mapView3D->clearTrace();
-    m_simulator->resetToHome(location.latitude, location.longitude, 50.0);
+    m_simulator->resetToHome(location.latitude, location.longitude, 0.0);
 }
 
 void MainWindow::onStateUpdated(const DroneState &state)
