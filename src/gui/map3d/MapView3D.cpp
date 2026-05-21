@@ -82,6 +82,7 @@ MapView3D::~MapView3D()
     if (m_glInitialized) {
         makeCurrent();
         clearStaticCityVbos();
+        clearDynamicVbos();
         delete m_staticCityProgram;
         m_staticCityProgram = nullptr;
         doneCurrent();
@@ -206,6 +207,8 @@ void MapView3D::setHome(double latitude, double longitude, int radiusMeters,
     m_tracePath.clear();
     m_waypoints.clear();
     m_activeWpIndex = -1;
+    m_traceVboDirty = true;
+    m_waypointPathVboDirty = true;
     m_buildings.clear();
     m_groundPaths.clear();
     rebuildStaticCityMesh();
@@ -233,6 +236,7 @@ void MapView3D::updateDrone(double latitude, double longitude, double altitude,
         if (m_tracePath.size() > MAX_TRACE_POINTS) {
             m_tracePath.removeFirst();
         }
+        m_traceVboDirty = true;
     }
 
     // カメラをドローンに追従（スムーズ）
@@ -244,6 +248,7 @@ void MapView3D::updateDrone(double latitude, double longitude, double altitude,
 void MapView3D::clearTrace()
 {
     m_tracePath.clear();
+    m_traceVboDirty = true;
     update();
 }
 
@@ -269,6 +274,8 @@ void MapView3D::initializeGL()
     glFogf(GL_FOG_END, 760.0f);
     initializeStaticCityShader();
     uploadStaticCityMeshToGpu();
+    uploadTraceToGpu();
+    uploadWaypointPathToGpu();
 }
 
 void MapView3D::resizeGL(int w, int h)
@@ -471,6 +478,143 @@ void MapView3D::uploadStaticCityMeshToGpu()
     }
 
     m_staticCityVboDirty = false;
+}
+
+void MapView3D::clearDynamicVbos()
+{
+    if (m_traceVbo != 0) {
+        glDeleteBuffers(1, &m_traceVbo);
+        m_traceVbo = 0;
+    }
+    if (m_waypointPathVbo != 0) {
+        glDeleteBuffers(1, &m_waypointPathVbo);
+        m_waypointPathVbo = 0;
+    }
+    m_traceVboCount = 0;
+    m_waypointPathVboCount = 0;
+}
+
+void MapView3D::uploadTraceToGpu()
+{
+    if (!m_glInitialized || !m_traceVboDirty) {
+        return;
+    }
+
+    if (m_tracePath.size() < 2) {
+        m_traceVboCount = 0;
+        m_traceVboDirty = false;
+        return;
+    }
+
+    QVector<PackedCityVertex> packed;
+    packed.reserve(m_tracePath.size());
+    for (int i = 0; i < m_tracePath.size(); ++i) {
+        const float t = static_cast<float>(i) / static_cast<float>(m_tracePath.size());
+        const QVector3D &point = m_tracePath[i];
+        packed.append({
+            point.x(),
+            point.y(),
+            point.z(),
+            0.2f + 0.6f * t,
+            0.4f + 0.4f * t,
+            0.9f,
+            0.3f + 0.7f * t
+        });
+    }
+
+    if (m_traceVbo == 0) {
+        glGenBuffers(1, &m_traceVbo);
+    }
+    glBindBuffer(GL_ARRAY_BUFFER, m_traceVbo);
+    glBufferData(GL_ARRAY_BUFFER,
+                 static_cast<GLsizeiptr>(packed.size() * sizeof(PackedCityVertex)),
+                 packed.constData(),
+                 GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    m_traceVboCount = packed.size();
+    m_traceVboDirty = false;
+}
+
+void MapView3D::uploadWaypointPathToGpu()
+{
+    if (!m_glInitialized || !m_waypointPathVboDirty) {
+        return;
+    }
+
+    if (m_waypoints.isEmpty()) {
+        m_waypointPathVboCount = 0;
+        m_waypointPathVboDirty = false;
+        return;
+    }
+
+    QVector<PackedCityVertex> packed;
+    packed.reserve(m_waypoints.size());
+    for (int i = 0; i < m_waypoints.size(); ++i) {
+        const WpData &wp = m_waypoints[i];
+        const bool isActive = (i == m_activeWpIndex);
+        packed.append({
+            wp.pos.x(),
+            wp.pos.y(),
+            wp.pos.z(),
+            isActive ? 1.0f : 0.9f,
+            isActive ? 0.78f : 0.3f,
+            isActive ? 0.0f : 0.24f,
+            isActive ? 0.9f : 0.7f
+        });
+    }
+
+    if (m_waypointPathVbo == 0) {
+        glGenBuffers(1, &m_waypointPathVbo);
+    }
+    glBindBuffer(GL_ARRAY_BUFFER, m_waypointPathVbo);
+    glBufferData(GL_ARRAY_BUFFER,
+                 static_cast<GLsizeiptr>(packed.size() * sizeof(PackedCityVertex)),
+                 packed.constData(),
+                 GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    m_waypointPathVboCount = packed.size();
+    m_waypointPathVboDirty = false;
+}
+
+void MapView3D::drawDynamicVbo(GLuint buffer, int vertexCount, GLenum primitive, float lineWidth)
+{
+    if (buffer == 0 || vertexCount <= 0) {
+        return;
+    }
+    if (!m_staticCityProgram && !initializeStaticCityShader()) {
+        return;
+    }
+
+    const QMatrix4x4 view = viewMatrix();
+    const QMatrix4x4 mvp = projectionMatrix() * view;
+    m_staticCityProgram->bind();
+    m_staticCityProgram->setUniformValue(m_staticCityMvpLocation, mvp);
+    m_staticCityProgram->setUniformValue(m_staticCityModelViewLocation, view);
+    m_staticCityProgram->setUniformValue(m_staticCityFogColorLocation,
+                                         QVector4D(0.42f, 0.52f, 0.62f, 1.0f));
+    m_staticCityProgram->setUniformValue(m_staticCityFogStartLocation, 260.0f);
+    m_staticCityProgram->setUniformValue(m_staticCityFogEndLocation, 760.0f);
+
+    glLineWidth(lineWidth);
+    glBindBuffer(GL_ARRAY_BUFFER, buffer);
+    m_staticCityProgram->enableAttributeArray(m_staticCityPositionLocation);
+    m_staticCityProgram->setAttributeBuffer(m_staticCityPositionLocation,
+                                            GL_FLOAT,
+                                            offsetof(PackedCityVertex, x),
+                                            3,
+                                            sizeof(PackedCityVertex));
+    m_staticCityProgram->enableAttributeArray(m_staticCityColorLocation);
+    m_staticCityProgram->setAttributeBuffer(m_staticCityColorLocation,
+                                            GL_FLOAT,
+                                            offsetof(PackedCityVertex, r),
+                                            4,
+                                            sizeof(PackedCityVertex));
+    glDrawArrays(primitive, 0, vertexCount);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    m_staticCityProgram->disableAttributeArray(m_staticCityColorLocation);
+    m_staticCityProgram->disableAttributeArray(m_staticCityPositionLocation);
+    m_staticCityProgram->release();
 }
 
 void MapView3D::drawSkyGradient()
@@ -717,15 +861,10 @@ void MapView3D::drawTrace()
 {
     if (m_tracePath.size() < 2) return;
 
-    glLineWidth(2.0f);
-    glBegin(GL_LINE_STRIP);
-    for (int i = 0; i < m_tracePath.size(); i++) {
-        float t = static_cast<float>(i) / m_tracePath.size();
-        // 古い部分は暗く、新しい部分は明るく
-        glColor4f(0.2f + 0.6f * t, 0.4f + 0.4f * t, 0.9f, 0.3f + 0.7f * t);
-        glVertex3f(m_tracePath[i].x(), m_tracePath[i].y(), m_tracePath[i].z());
+    if (m_traceVboDirty) {
+        uploadTraceToGpu();
     }
-    glEnd();
+    drawDynamicVbo(m_traceVbo, m_traceVboCount, GL_LINE_STRIP, 2.0f);
 }
 
 void MapView3D::drawShadow()
@@ -975,12 +1114,14 @@ void MapView3D::setWaypoints(const QVector<MissionItem> &items)
         wp.seq = i;
         m_waypoints.append(wp);
     }
+    m_waypointPathVboDirty = true;
     update();
 }
 
 void MapView3D::setActiveWaypoint(int index)
 {
     m_activeWpIndex = index;
+    m_waypointPathVboDirty = true;
     update();
 }
 
@@ -988,19 +1129,11 @@ void MapView3D::drawWaypoints()
 {
     if (m_waypoints.isEmpty()) return;
 
-    // 経路ライン（破線風に）
-    glLineWidth(2.0f);
-    glBegin(GL_LINE_STRIP);
-    for (int i = 0; i < m_waypoints.size(); i++) {
-        const auto &wp = m_waypoints[i];
-        if (i == m_activeWpIndex) {
-            glColor4f(1.0f, 0.78f, 0.0f, 0.9f); // 黄
-        } else {
-            glColor4f(0.9f, 0.3f, 0.24f, 0.7f); // 赤
-        }
-        glVertex3f(wp.pos.x(), wp.pos.y(), wp.pos.z());
+    // 経路ライン
+    if (m_waypointPathVboDirty) {
+        uploadWaypointPathToGpu();
     }
-    glEnd();
+    drawDynamicVbo(m_waypointPathVbo, m_waypointPathVboCount, GL_LINE_STRIP, 2.0f);
 
     // WPマーカー（球体の代わりに八角形ダイヤモンド）
     for (int i = 0; i < m_waypoints.size(); i++) {

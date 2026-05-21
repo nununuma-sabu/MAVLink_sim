@@ -82,6 +82,10 @@ private:
     void rebuildStaticCityMesh();
     void uploadStaticCityMeshToGpu();
     void clearStaticCityVbos();
+    void uploadTraceToGpu();
+    void uploadWaypointPathToGpu();
+    void clearDynamicVbos();
+    void drawDynamicVbo(GLuint buffer, int vertexCount, GLenum primitive, float lineWidth);
     bool initializeStaticCityShader();
     QMatrix4x4 projectionMatrix() const;
     QMatrix4x4 viewMatrix() const;
@@ -137,6 +141,12 @@ private:
     QVector<GroundPathData> m_groundPaths;
     Map3DStaticMesh m_staticCityMesh;
     QVector<StaticVboBatch> m_staticCityVboBatches;
+    GLuint m_traceVbo = 0;
+    int m_traceVboCount = 0;
+    bool m_traceVboDirty = true;
+    GLuint m_waypointPathVbo = 0;
+    int m_waypointPathVboCount = 0;
+    bool m_waypointPathVboDirty = true;
     QOpenGLShaderProgram *m_staticCityProgram = nullptr;
     int m_staticCityMvpLocation = -1;
     int m_staticCityModelViewLocation = -1;
